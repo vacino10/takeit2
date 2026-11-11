@@ -1035,7 +1035,10 @@ var GiveReason = function GiveReason({ next, ctx }) {
 var GiveSavings = function GiveSavings({ next }) {
   const h1 = useRef(new Animated.Value(0)).current;
   const h2 = useRef(new Animated.Value(0)).current;
+  const [price, setPrice] = useState(0);
   useEffect(() => {
+    // běžná cena odvozu gauče/skříně na sběrný dvůr od řemeslníků je cca 1 000–1 500 Kč
+    const id = h1.addListener(({ value }) => setPrice(Math.round(((value / 230) * 1500) / 10) * 10));
     const stop = rumble(2100, { delay: 300 });
     Animated.sequence([
       Animated.delay(300),
@@ -1044,27 +1047,32 @@ var GiveSavings = function GiveSavings({ next }) {
         Animated.timing(h2, { toValue: 34, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
       ]),
     ]).start(() => success());
-    return stop;
+    return () => {
+      stop();
+      h1.removeListener(id);
+    };
   }, []);
   return (
     <StepLayout
       title="Ušetři za odvoz"
-      subtitle="Odvoz objemné věci tě může stát stovky korun. Soused si ji odnese zdarma."
+      subtitle="Odvézt starý gauč na sběrný dvůr stojí běžně 1 000–1 500 Kč. Soused si ho odnese zdarma."
       onNext={next}
     >
       <View style={{ flex: 1, justifyContent: 'center' }}>
         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end', height: 260 }}>
           <View style={{ alignItems: 'center', marginHorizontal: 22 }}>
+            <Text style={{ fontSize: 30, marginBottom: 8 }}>🛋️</Text>
             <Animated.View style={[st.bar, { height: h1, backgroundColor: '#2A2A2A' }]} />
           </View>
           <View style={{ alignItems: 'center', marginHorizontal: 22 }}>
+            <Text style={{ fontSize: 30, marginBottom: 8 }}>🤝</Text>
             <Animated.View style={[st.bar, { height: h2, backgroundColor: B }]} />
           </View>
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 14 }}>
           <View style={st.barLabelBox}>
-            <Text style={st.barValue}>stovky Kč</Text>
-            <Text style={st.barLabel}>Odvoz</Text>
+            <Text style={st.barValue}>{kc(price)} Kč</Text>
+            <Text style={st.barLabel}>Odvoz gauče</Text>
           </View>
           <View style={st.barLabelBox}>
             <Text style={[st.barValue, { color: B }]}>0 Kč</Text>
@@ -1075,6 +1083,7 @@ var GiveSavings = function GiveSavings({ next }) {
           <Text style={[st.sub, { textAlign: 'center', marginTop: 28 }]}>
             Na Givu si to soused odnese sám – a ty nezaplatíš nic.
           </Text>
+          <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 10, fontSize: 12 }]}>Orientační ceny odvozu nábytku na sběrný dvůr od řemeslníků v ČR.</Text>
         </FadeIn>
       </View>
     </StepLayout>
@@ -2335,11 +2344,48 @@ var CommunityStep = function CommunityStep({ next }) {
 }
 
 // ---------- Mapa sousedů v onboardingu (bez vymyšlených dat) ----------
+// Ilustrace: druhy věcí, které se kolem tebe dají darovat (ne skutečné inzeráty)
+var MAP_ICONS = [
+  ['🛋️', -105, -95], ['🧸', 40, -140], ['📚', 120, -60], ['🪴', -140, 10], ['🚲', 135, 45],
+  ['👕', -80, 105], ['☕', 30, 135], ['🪑', 100, 125], ['🎸', -30, -55], ['🧺', 65, 25],
+];
+var MapItem = function MapItem({ e, x, y, delay }) {
+  const a = useRef(new Animated.Value(0)).current;
+  const f = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(a, { toValue: 1, duration: 600, delay, easing: Easing.out(Easing.back(1.6)), useNativeDriver: true }).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(f, { toValue: 1, duration: 2200 + (delay % 900), easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(f, { toValue: 0, duration: 2200 + (delay % 900), easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return (
+    <Animated.View
+      style={[
+        st.mapItem,
+        {
+          transform: [
+            { translateX: x },
+            { translateY: Animated.add(y, f.interpolate({ inputRange: [0, 1], outputRange: [0, -6] })) },
+            { scale: a },
+          ],
+          opacity: a,
+        },
+      ]}
+    >
+      <Text style={{ fontSize: 22 }}>{e}</Text>
+    </Animated.View>
+  );
+}
+
 var NeighborsMap = function NeighborsMap({ next, ctx }) {
   const pulse = useRef(new Animated.Value(0)).current;
   const center = ctx.loc || CENTER;
   useEffect(() => {
     Animated.loop(Animated.timing(pulse, { toValue: 1, duration: 2000, easing: Easing.out(Easing.quad), useNativeDriver: true })).start();
+    return rumble(MAP_ICONS.length * 260 + 600, { delay: 500, peak: 'Medium', end: 'success' });
   }, []);
   return (
     <View style={{ flex: 1 }}>
@@ -2368,7 +2414,12 @@ var NeighborsMap = function NeighborsMap({ next, ctx }) {
           }}
         />
       </View>
-      <LinearGradient colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0)']} style={{ paddingHorizontal: 24, paddingBottom: 60 }} pointerEvents="none">
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+        {MAP_ICONS.map(([e, x, y], i) => (
+          <MapItem key={e} e={e} x={x} y={y} delay={500 + i * 260} />
+        ))}
+      </View>
+      <LinearGradient colors={['#FFFFFF', 'rgba(255,255,255,0.94)', 'rgba(255,255,255,0)']} locations={[0, 0.65, 1]} style={{ paddingHorizontal: 24, paddingBottom: 80 }} pointerEvents="none">
         <FadeIn>
           <Text style={st.h1}>Darování funguje kolem tebe</Text>
           <Text style={[st.sub, { color: INK }]}>Tvoje věci uvidí sousedé v okolí – a ty zase jejich.</Text>
@@ -3914,6 +3965,7 @@ var st = StyleSheet.create({
   reasonTagTxt: { fontSize: 12.5, fontWeight: '700', color: B, marginLeft: 4 },
   aboutInput: { minHeight: 96, backgroundColor: CARD, borderRadius: 16, padding: 14, paddingTop: 14, fontSize: 16, lineHeight: 22, color: INK, textAlignVertical: 'top' },
   aboutQuote: { marginTop: 6, borderLeftWidth: 3, borderLeftColor: B_LIGHT, paddingLeft: 10 },
+  mapItem: { position: 'absolute', width: 46, height: 46, borderRadius: 23, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', shadowColor: '#2A1060', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
   stickyFooter: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 30, borderTopWidth: 1, borderTopColor: '#EFEFF2', backgroundColor: '#fff' },
   optCheck: { position: 'absolute', right: 16, top: '50%', marginTop: 1, width: 22, height: 22, borderRadius: 11, backgroundColor: B, alignItems: 'center', justifyContent: 'center' },
   pointsPill: { backgroundColor: B_LIGHT, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
