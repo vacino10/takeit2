@@ -49,6 +49,13 @@ a:hover { text-decoration: underline; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 h1 { font-size: clamp(40px, 6vw, 68px); line-height: 1.02; letter-spacing: -0.035em; margin: 0 0 18px; font-weight: 800; }
 h1 em { font-style: normal; color: var(--b); }
+/* „zdarma“ s ručně tahaným podtržením, které se při načtení nakreslí */
+h1 em.mark { position: relative; display: inline-block; white-space: nowrap; margin-bottom: 0.18em; }
+.swoosh { position: absolute; left: -4%; bottom: -0.34em; width: 108%; height: 0.5em; overflow: visible; pointer-events: none; }
+.swoosh path { fill: none; stroke-linecap: round; stroke-dasharray: 400; stroke-dashoffset: 400; animation: draw 0.9s cubic-bezier(.6,.1,.3,1) forwards; }
+.swoosh .s1 { stroke: #7de3b8; stroke-width: 13; animation-delay: 0.35s; }
+.swoosh .s2 { stroke: #b79cff; stroke-width: 6; opacity: 0.9; animation-delay: 0.7s; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
 .lead { font-size: 19px; color: var(--sub); max-width: 520px; margin: 0 0 28px; }
 h2 { font-size: clamp(30px, 4vw, 44px); line-height: 1.08; letter-spacing: -0.03em; margin: 0 0 14px; font-weight: 800; }
 h3 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.01em; }
