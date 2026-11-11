@@ -25,7 +25,6 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import Svg, { Path } from 'react-native-svg';
 
 // Mapa jen na telefonu (na webu by react-native-maps spadla)
 let MapView = null;
@@ -530,19 +529,15 @@ function NeighborsMap({ next }) {
   );
 }
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
 function GiveSpeed({ next }) {
   const a = useRef(new Animated.Value(0)).current;
+  const b = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(a, {
-      toValue: 1,
-      duration: 1600,
-      delay: 300,
-      easing: Easing.inOut(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
+    Animated.stagger(350, [
+      Animated.timing(a, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(b, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    ]).start(() => success());
   }, []);
-  const off = a.interpolate({ inputRange: [0, 1], outputRange: [400, 0] });
   return (
     <StepLayout
       title="Proč se to vyplatí?"
@@ -550,36 +545,18 @@ function GiveSpeed({ next }) {
       onNext={next}
     >
       <FadeIn delay={150} style={st.chartCard}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text style={st.chartL}>Sběrný dvůr</Text>
-          <Text style={[st.chartL, { color: B }]}>TAKE.IT</Text>
+        <Text style={st.chartL}>Sběrný dvůr</Text>
+        <View style={st.hTrack}>
+          <Animated.View style={[st.hBar, { backgroundColor: '#2A2A2A', width: a.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
         </View>
-        <Svg width="100%" height={170} viewBox="0 0 300 170">
-          <AnimatedPath
-            d="M10 140 C 90 135, 140 110, 190 70 S 260 22, 290 18"
-            stroke={INK}
-            strokeWidth={4}
-            fill="none"
-            strokeLinecap="round"
-            strokeDasharray="400"
-            strokeDashoffset={off}
-          />
-          <AnimatedPath
-            d="M10 155 C 120 152, 200 148, 290 142"
-            stroke={B}
-            strokeWidth={4}
-            fill="none"
-            strokeLinecap="round"
-            strokeDasharray="400"
-            strokeDashoffset={off}
-          />
-        </Svg>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text style={st.chartAxis}>Přidání</Text>
-          <Text style={st.chartAxis}>Vyzvednuto</Text>
+        <Text style={st.chartAxis}>Naložit → odvézt → vyložit → zpátky domů</Text>
+        <Text style={[st.chartL, { color: B, marginTop: 22 }]}>TAKE.IT</Text>
+        <View style={st.hTrack}>
+          <Animated.View style={[st.hBar, { backgroundColor: B, width: b.interpolate({ inputRange: [0, 1], outputRange: ['0%', '18%'] }) }]} />
         </View>
+        <Text style={st.chartAxis}>Vyfoť → přidej → soused si to vyzvedne</Text>
       </FadeIn>
-      <FadeIn delay={700} style={{ alignItems: 'center', marginTop: 28 }}>
+      <FadeIn delay={900} style={{ alignItems: 'center', marginTop: 28 }}>
         <Text style={st.bigNum}>30 s</Text>
         <Text style={st.sub}>na přidání inzerátu, zbytek vyřeší sousedé</Text>
       </FadeIn>
