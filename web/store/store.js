@@ -150,10 +150,70 @@
     },
   };
 
+
+  // ---------- LinkedIn (1080×1350, 4:5) ----------
+  const foot = (u, n, total) =>
+    `<div class="brandfoot"><img class="i" src="/img/icon-512.png" alt=""><img class="l" src="/img/logo.png" alt=""></div>` +
+    (n < total ? `<div class="swipe">Další →</div>` : `<div class="slideno">${n}/${total}</div>`);
+  const LINKEDIN = [
+    {
+      id: 'li-1-parapet', left: true,
+      html: (L) => {
+        const u = L.W / 100;
+        const items = [['teddy', 18, 0.05, 24], ['lamp', 50, 0.0, 30], ['books', 82, 0.08, 22], ['mugs', 30, 0.5, 20], ['plant', 70, 0.46, 26], ['jacket', 50, 0.82, 16], ['chair', 12, 0.86, 15], ['coffee', 88, 0.84, 15]];
+        const top = L.H * 0.47, h = L.H * 0.33;
+        return head(u * 11, 'Sousedi u nás dávají věci <em>na parapet.</em>', 'A čekají, až si je někdo vezme. Mám to rád – tak jsem tomu dal appku.') +
+          items.map(([k, x, y, s]) => { const d = s * u; return `<div class="bub" style="width:${d}px;height:${d}px;left:${(x / 100) * L.W - d / 2}px;top:${top + y * h}px"><img src="${U(PH[k], 600)}" alt=""></div>`; }).join('') +
+          spark(90, 40, u * 5, '#7DE3B8') + spark(6, 45, u * 4, '#7028E8') + foot(u, 1, 5);
+      },
+    },
+    {
+      id: 'li-2-kdo-potrebuje',
+      html: (L) => {
+        const u = L.W / 100;
+        return head(u * 9, 'Ať to dostane, kdo to <em>potřebuje.</em>', 'Zájemci napíšou pár slov o sobě. Ty vybereš, komu věc dáš.') +
+          phone('activity', { top: u * 51, w: u * 50 }) + `<div class="slideno" style="top:${u * 4.5}px;bottom:auto">2/5</div>`;
+      },
+    },
+    {
+      id: 'li-3-hotovo',
+      html: (L) => {
+        const u = L.W / 100;
+        return head(u * 9, 'Vyfotit, přidat, <em>hotovo.</em>', 'Sousedé v okolí to hned uvidí. Žádné smlouvání ani posílání.') +
+          phone('home', { top: u * 51, w: u * 50 }) +
+          card(u * 4, u * 51 + phoneH(u * 50) * 0.5, u * 46, `${photoIc(PH.sofa)}<div><b>Pohovka trojsed</b><span>Zdarma · 1,2 km</span></div>`, -4) + `<div class="slideno" style="top:${u * 4.5}px;bottom:auto">3/5</div>`;
+      },
+    },
+    {
+      id: 'li-4-bezpeci',
+      html: (L) => {
+        const u = L.W / 100;
+        const ph = phoneH(u * 50);
+        return head(u * 9, 'Kontakt jen pro <em>potvrzené.</em>', 'Telefon ani přesné místo nikdo jiný neuvidí.') +
+          phone('mine', { top: u * 51, w: u * 50 }) +
+          card(u * 3, u * 51 + ph * 0.38, u * 56, `${svgIc('lock')}<div><b>Kontakt až po potvrzení</b><span>Vidí ho jen ten, koho vybereš</span></div>`, -3) +
+          card(u * 41, u * 51 + ph * 0.56, u * 56, `${svgIc('pin')}<div><b>Jen přibližná poloha</b><span>Zhruba na 500 metrů</span></div>`, 2) + `<div class="slideno" style="top:${u * 4.5}px;bottom:auto">4/5</div>`;
+      },
+    },
+    {
+      id: 'li-5-givo', dark: true,
+      html: (L) => {
+        const u = L.W / 100;
+        const ic = u * 24;
+        return `<img class="icon-big" src="/img/icon-512.png" alt="" style="top:${u * 16}px;width:${ic}px;height:${ic}px">` +
+          head(u * 46, 'Věci od sousedů <em>zdarma.</em>', 'givo – darování věcí, které by jinak skončily v popelnici. Brzy v App Store a na Google Play.') +
+          `<div class="foot" style="bottom:${u * 14}px;color:#fff;font-size:${u * 4}px">givo-27d3a.web.app</div>` +
+          spark(14, 18, u * 5, '#7DE3B8') + spark(84, 30, u * 4, '#ffffff') +
+          `<div class="slideno" style="color:rgba(255,255,255,.7)">5/5</div>`;
+      },
+    },
+  ];
+
   const LAYOUT = {
     ios: { W: 1320, H: 2868, headTop: 230, phoneTop: 850, phoneW: 905 },
     play: { W: 1080, H: 1920, headTop: 120, phoneTop: 560, play: true, phoneW: 620 },
     feature: { W: 1024, H: 500 },
+    linkedin: { W: 1080, H: 1350 },
   };
 
   const grid = document.getElementById('grid');
@@ -162,15 +222,15 @@
     current = set;
     grid.innerHTML = '';
     const L = LAYOUT[set];
-    const list = set === 'feature' ? [FEATURE] : SHOTS;
-    const pw = Math.min(set === 'feature' ? 640 : 330, window.innerWidth - 36);
+    const list = set === 'feature' ? [FEATURE] : set === 'linkedin' ? LINKEDIN : SHOTS;
+    const pw = Math.min(set === 'feature' ? 640 : set === 'linkedin' ? 380 : 330, window.innerWidth - 36);
     list.forEach((s) => {
       const scale = pw / L.W;
       const cell = document.createElement('div');
       cell.className = 'cell';
       cell.innerHTML =
         `<div class="frame" style="width:${pw}px;height:${L.H * scale}px">` +
-        `<div class="shot${s.dark ? ' dark' : ''}" style="--u:${L.W / 100}px;width:${L.W}px;height:${L.H}px;transform:scale(${scale})">${s.html(L)}</div></div>` +
+        `<div class="shot${s.dark ? ' dark' : ''}${s.left ? ' left' : ''}" style="--u:${L.W / 100}px;width:${L.W}px;height:${L.H}px;transform:scale(${scale})">${s.html(L)}</div></div>` +
         `<div class="meta"><span>${s.id} · ${L.W}×${L.H}</span><button class="dl">Stáhnout</button></div>`;
       cell.querySelector('.dl').onclick = () => download(cell.querySelector('.shot'), `givo-${set}-${s.id}.jpg`, L);
       grid.appendChild(cell);
@@ -212,6 +272,7 @@
       ...SHOTS.map((s) => ['ios', s, 'App Store (1320x2868)']),
       ...SHOTS.map((s) => ['play', s, 'Google Play (1080x1920)']),
       ['feature', FEATURE, 'Google Play – feature graphic (1024x500)'],
+      ...LINKEDIN.map((s) => ['linkedin', s, 'LinkedIn (1080x1350)']),
     ];
     const zip = new JSZip();
     btn.disabled = true;
@@ -220,7 +281,7 @@
         const [set, s, folder] = jobs[k];
         const L = LAYOUT[set];
         btn.textContent = `Generuju ${k + 1}/${jobs.length}…`;
-        offscreen.innerHTML = `<div class="shot${s.dark ? ' dark' : ''}" style="--u:${L.W / 100}px;width:${L.W}px;height:${L.H}px">${s.html(L)}</div>`;
+        offscreen.innerHTML = `<div class="shot${s.dark ? ' dark' : ''}${s.left ? ' left' : ''}" style="--u:${L.W / 100}px;width:${L.W}px;height:${L.H}px">${s.html(L)}</div>`;
         const node = offscreen.firstChild;
         await waitImgs(node);
         const url = await htmlToImage.toJpeg(node, { width: L.W, height: L.H, pixelRatio: 1, quality: 0.95, backgroundColor: '#ffffff' });
@@ -245,6 +306,6 @@
     btn.disabled = false;
     setTimeout(() => (btn.textContent = 'Stáhnout vše (ZIP)'), 4000);
   };
-  window.__givoStore = { render, LAYOUT, SHOTS, FEATURE };
+  window.__givoStore = { render, LAYOUT, SHOTS, FEATURE, LINKEDIN };
   render('ios');
 })();
