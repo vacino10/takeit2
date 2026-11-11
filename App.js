@@ -73,6 +73,21 @@ const success = () => {
 const kc = (n) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
 // ---------- Data ----------
+const PHOTO_IDS = {
+  Pohovka: 'photo-1555041469-a586c61ea9bc',
+  'Dětské kolo': 'photo-1485965120184-e220f721d03e',
+  'Monitor 24"': 'photo-1527443224154-c4a3942d3acf',
+  Kávovar: 'photo-1517668808822-9ebb02f2a0e6',
+  Monstera: 'photo-1614594975525-e45190c55d0b',
+  'Stolní lampa': 'photo-1507473885765-e6ed057f782c',
+  'Krabice knih': 'photo-1512820790803-83ca734da794',
+  'Zimní bunda': 'photo-1551028719-00167b16eac5',
+  Plyšáci: 'photo-1559454403-b8fb88521f11',
+  'Jídelní židle': 'photo-1503602642458-232111445657',
+  Sluchátka: 'photo-1505740420928-5e560c06d30e',
+  'Sada hrnků': 'photo-1514228742587-6b1558fcca3d',
+};
+const photo = (id, extra = '') => `https://images.unsplash.com/${id}?w=700&q=70&auto=format&fit=crop${extra}`;
 const ITEMS_RAW = [
   { t: 'Pohovka', e: '🛋️', km: '1,2', m: 8, g: ['#EFE8FF', '#D9CCFF'] },
   { t: 'Dětské kolo', e: '🚲', km: '2,4', m: 14, g: ['#E6F6FF', '#C9E9FF'] },
@@ -97,7 +112,7 @@ const DONORS = [
   { n: 'Martin', e: '👨', r: '4,7', c: 7, resp: 'během dne' },
 ];
 const ITEM_CATS = { Pohovka: 'Nábytek', 'Dětské kolo': 'Sport', 'Monitor 24"': 'Elektronika', Kávovar: 'Domácnost', Monstera: 'Zahrada', 'Stolní lampa': 'Domácnost', 'Krabice knih': 'Knihy', 'Zimní bunda': 'Oblečení', Plyšáci: 'Pro děti', 'Jídelní židle': 'Nábytek', Sluchátka: 'Elektronika', 'Sada hrnků': 'Domácnost' };
-const ITEMS = ITEMS_RAW.map((it, i) => ({ ...it, cat: ITEM_CATS[it.t], donor: DONORS[i % DONORS.length], lat: CENTER.latitude + (((i * 37) % 11) - 5) * 0.0045, lng: CENTER.longitude + (((i * 53) % 13) - 6) * 0.006, v: VALUES[it.t] || 500, demo: true, contact: DEMO_CONTACT, d: 'Ve velmi dobrém stavu, vyzvednutí po domluvě.', chip: 'U dveří' }));
+const ITEMS = ITEMS_RAW.map((it, i) => ({ ...it, img: PHOTO_IDS[it.t] ? photo(PHOTO_IDS[it.t]) : null, img2: PHOTO_IDS[it.t] ? photo(PHOTO_IDS[it.t], '&crop=focalpoint&fp-x=0.5&fp-y=0.5&fp-z=1.8') : null, cat: ITEM_CATS[it.t], donor: DONORS[i % DONORS.length], lat: CENTER.latitude + (((i * 37) % 11) - 5) * 0.0045, lng: CENTER.longitude + (((i * 53) % 13) - 6) * 0.006, v: VALUES[it.t] || 500, demo: true, contact: DEMO_CONTACT, d: 'Ve velmi dobrém stavu, vyzvednutí po domluvě.', chip: 'U dveří' }));
 
 const CATEGORIES = [
   ['🛋️', 'Nábytek'], ['📱', 'Elektronika'], ['👕', 'Oblečení'], ['🧸', 'Pro děti'],
@@ -458,21 +473,32 @@ function Slider({ value, min, max, onChange }) {
   );
 }
 
+// Fotka věci (vlastní fotka > ukázková fotka > emoji jako záloha)
+function Thumb({ item, style, emojiSize = 30, src, children }) {
+  const [err, setErr] = useState(false);
+  const uri = src || item.uri || item.img;
+  return (
+    <LinearGradient colors={item.g || [B_LIGHT, '#DCCFFF']} style={[{ alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, style]}>
+      {uri && !err ? (
+        <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" onError={() => setErr(true)} />
+      ) : (
+        <Text style={{ fontSize: emojiSize }}>{item.e}</Text>
+      )}
+      {children}
+    </LinearGradient>
+  );
+}
+
 function ItemCard({ item, i = 0, onPress }) {
   const size = (W - 48 - 12) / 2;
   return (
     <FadeIn delay={Math.min(i, 8) * 60} style={{ width: size, marginBottom: 12 }}>
       <Pressable onPress={onPress} style={st.itemCard}>
-        <LinearGradient colors={item.g} style={{ height: size * 0.9, alignItems: 'center', justifyContent: 'center' }}>
-          {item.uri ? (
-            <Image source={{ uri: item.uri }} style={StyleSheet.absoluteFill} />
-          ) : (
-            <Text style={{ fontSize: size * 0.34 }}>{item.e}</Text>
-          )}
+        <Thumb item={item} emojiSize={size * 0.34} style={{ height: size * 0.9 }}>
           <View style={st.freeBadge}>
             <Text style={[st.freeBadgeTxt, item.badgeColor && { color: item.badgeColor }]}>{item.badge || 'ZDARMA'}</Text>
           </View>
-        </LinearGradient>
+        </Thumb>
         <View style={{ padding: 10 }}>
           <Text style={st.itemTitle} numberOfLines={1}>{item.t}</Text>
           <Text style={st.itemMeta}>{item.km} km • před {item.m} min</Text>
@@ -560,12 +586,11 @@ function FloatCard({ item, style, rot, delay }) {
         },
       ]}
     >
-      <LinearGradient colors={item.g} style={{ height: 86, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontSize: 40 }}>{item.e}</Text>
+      <Thumb item={item} emojiSize={40} style={{ height: 86, borderRadius: 14 }}>
         <View style={[st.freeBadge, { top: 6, left: 6, paddingHorizontal: 6, paddingVertical: 2 }]}>
           <Text style={[st.freeBadgeTxt, { fontSize: 9 }]}>ZDARMA</Text>
         </View>
-      </LinearGradient>
+      </Thumb>
       <Text style={{ fontWeight: '700', fontSize: 12, marginTop: 6, color: INK }} numberOfLines={1}>{item.t}</Text>
       <Text style={{ fontSize: 10, color: SUB }}>{item.km} km • před {item.m} min</Text>
     </Animated.View>
@@ -1464,6 +1489,8 @@ function Gallery({ item, height }) {
   const [page, setPage] = useState(0);
   const slides = item.photos && item.photos.length
     ? item.photos.map((u) => ({ uri: u }))
+    : item.img
+    ? [{ uri: item.img }, { uri: item.img2 || item.img }]
     : [
         { e: item.e, size: 130, rot: '0deg' },
         { e: item.e, size: 190, rot: '-12deg' },
@@ -1478,13 +1505,13 @@ function Gallery({ item, height }) {
         onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / W))}
       >
         {slides.map((sl, k) => (
-          <LinearGradient key={k} colors={k % 2 ? [item.g[1], item.g[0]] : item.g} style={{ width: W, height, alignItems: 'center', justifyContent: 'center' }}>
-            {sl.uri ? (
-              <Image source={{ uri: sl.uri }} style={StyleSheet.absoluteFill} />
-            ) : (
+          sl.uri ? (
+            <Thumb key={k} item={item} src={sl.uri} emojiSize={130} style={{ width: W, height }} />
+          ) : (
+            <LinearGradient key={k} colors={k % 2 ? [item.g[1], item.g[0]] : item.g} style={{ width: W, height, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: sl.size, transform: [{ rotate: sl.rot }] }}>{sl.e}</Text>
-            )}
-          </LinearGradient>
+            </LinearGradient>
+          )
         ))}
       </ScrollView>
       {slides.length > 1 ? (
@@ -2323,9 +2350,7 @@ function LockedOverlay({ ctx, onUnlock, onSkip }) {
             style={{ flexDirection: 'row', transform: [{ translateX: marquee.interpolate({ inputRange: [0, 1], outputRange: [0, -rowW] }) }] }}
           >
             {row.map((x, i) => (
-              <LinearGradient key={i} colors={x.g} style={st.marqueeChip}>
-                <Text style={{ fontSize: 26 }}>{x.e}</Text>
-              </LinearGradient>
+              <Thumb key={i} item={x} emojiSize={26} style={st.marqueeChip} />
             ))}
           </Animated.View>
         </View>
@@ -2389,7 +2414,7 @@ function MapPin({ item, active }) {
   return (
     <View style={{ alignItems: 'center' }}>
       <View style={[st.mapPin, active && { borderColor: B, transform: [{ scale: 1.15 }] }, item.badge && { borderColor: item.badgeColor || B }]}>
-        <Text style={{ fontSize: 22 }}>{item.e}</Text>
+        <Thumb item={item} emojiSize={22} style={{ width: 40, height: 40, borderRadius: 20 }} />
       </View>
       <View style={[st.mapPinTip, active && { borderTopColor: B }]} />
     </View>
@@ -2449,9 +2474,7 @@ function ItemsMap({ items, selected, onSelect, onOpen }) {
           ]}
         >
           <Pressable onPress={() => onOpen(selected)} style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <LinearGradient colors={selected.g} style={{ width: 72, height: 72, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-              {selected.uri ? <Image source={{ uri: selected.uri }} style={StyleSheet.absoluteFill} /> : <Text style={{ fontSize: 32 }}>{selected.e}</Text>}
-            </LinearGradient>
+            <Thumb item={selected} emojiSize={32} style={{ width: 72, height: 72, borderRadius: 16 }} />
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={st.itemTitle}>{selected.t}</Text>
               <Text style={{ color: selected.badgeColor || GREEN, fontWeight: '800', marginTop: 2 }}>{selected.badge || 'Zdarma'}</Text>
@@ -2859,9 +2882,7 @@ function ActivityTab({ ctx }) {
           const it = ITEMS.find((x) => x.t === t);
           return (
             <View key={t} style={[st.reqCard, { flexDirection: 'row', alignItems: 'center' }]}>
-              <View style={st.avatar}>
-                <Text style={{ fontSize: 24 }}>{it ? it.e : '🎁'}</Text>
-              </View>
+              {it ? <Thumb item={it} emojiSize={24} style={[st.avatar, { borderRadius: 14 }]} /> : null}
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={st.h2}>{t}</Text>
                 <Text style={[st.chartAxis, stt === 'accepted' && { color: GREEN, fontWeight: '700' }]}>
@@ -2976,9 +2997,7 @@ function ProfileTab({ ctx, onRestart }) {
             <Text style={st.section}>Získané věci</Text>
             {gotItems.map((x) => (
               <View key={x.t} style={[st.reqCard, { flexDirection: 'row', alignItems: 'center' }]}>
-                <LinearGradient colors={x.g} style={[st.avatar, { borderRadius: 14 }]}>
-                  <Text style={{ fontSize: 24 }}>{x.e}</Text>
-                </LinearGradient>
+                <Thumb item={x} emojiSize={24} style={[st.avatar, { borderRadius: 14 }]} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={st.h2}>{x.t}</Text>
                   <Text style={st.chartAxis}>od souseda • {x.km} km</Text>
