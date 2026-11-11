@@ -17,6 +17,7 @@ var AppleAuthentication = require('expo-apple-authentication');
 var { LinearGradient } = require('expo-linear-gradient');
 var Haptics = require('expo-haptics');
 var ImagePicker = require('expo-image-picker');
+var StoreReview = require('expo-store-review');
 var MapViewNative = __d(require('react-native-maps')); var { Marker: MarkerNative, Circle: CircleNative } = require('react-native-maps');
 
 var MapView = MapViewNative;
@@ -267,7 +268,15 @@ var markNotificationsRead = async function markNotificationsRead(uid) {
   await supabase.from('notifications').update({ read: true }).eq('user_id', uid).eq('read', false);
 }
 
-var api = { appleAvailable, signInWithApple, signOut, deleteAccount, getProfile, updateName, claimWelcome, getMyContact, saveContact, fetchFeed, fetchMyItems, createItem, deleteItem, markGiven, incrementView, requestItem, fetchOutgoing, fetchIncoming, acceptRequest, declineRequest, getContact, reportItem, blockUser, registerPush, fetchNotifications, markNotificationsRead };
+// ---------- Statistiky (skutečná čísla) ----------
+
+var publicStats = async function publicStats() {
+  const { data, error } = await supabase.rpc('public_stats');
+  if (error) throw error;
+  return data;
+}
+
+var api = { appleAvailable, signInWithApple, signOut, deleteAccount, getProfile, updateName, claimWelcome, getMyContact, saveContact, fetchFeed, fetchMyItems, createItem, deleteItem, markGiven, incrementView, requestItem, fetchOutgoing, fetchIncoming, acceptRequest, declineRequest, getContact, reportItem, blockUser, registerPush, fetchNotifications, markNotificationsRead, publicStats };
 
 // ---------- Brand ----------
 var B = '#7028E8';
@@ -2230,6 +2239,65 @@ var AddItemModal = function AddItemModal({ ctx }) {
 }
 
 
+// ---------- Komunita: skutečná čísla z databáze ----------
+var CountUp = function CountUp({ to, delay = 0 }) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    if (!to) return;
+    const a = new Animated.Value(0);
+    const id = a.addListener(({ value }) => setV(Math.round(value)));
+    Animated.timing(a, { toValue: to, duration: 1200, delay, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    return () => a.removeListener(id);
+  }, [to]);
+  return <Text style={[st.bigNum, { fontSize: 40 }]}>{kc(v)}</Text>;
+}
+
+var CommunityStep = function CommunityStep({ next }) {
+  const [stats, setStats] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    api.publicStats().then(setStats).catch(() => setFailed(true));
+  }, []);
+  const people = stats ? stats.people : 0;
+  const early = !stats || people < 1000;
+  return (
+    <StepLayout
+      title={early ? 'Buď mezi prvními sousedy' : 'Přidej se k sousedům'}
+      subtitle="TAKE.it právě startuje v Česku a na Slovensku. Každá darovaná věc se tu počítá."
+      onNext={next}
+    >
+      <View style={{ flex: 1, justifyContent: 'center' }}>
+        {stats ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            {[
+              [stats.items, 'věcí přidáno', '📦'],
+              [stats.given, 'věcí předáno', '🤝'],
+              [stats.people, 'lidí v TAKE.it', '💜'],
+            ].map(([n, l, e], i) => (
+              <FadeIn key={l} delay={150 + i * 150} style={[st.statBox, { flexBasis: i === 2 ? '100%' : '47%', flexGrow: 0, marginHorizontal: 0, marginBottom: 12, paddingVertical: 18 }]}>
+                <Text style={{ fontSize: 26 }}>{e}</Text>
+                <CountUp to={n} delay={300 + i * 150} />
+                <Text style={st.chartAxis}>{l}</Text>
+              </FadeIn>
+            ))}
+          </View>
+        ) : failed ? (
+          <View style={{ alignItems: 'center' }}>
+            <Taki size={150} mood="excited" wave />
+          </View>
+        ) : (
+          <ActivityIndicator color={B} />
+        )}
+        <FadeIn delay={900}>
+          <Text style={[st.sub, { textAlign: 'center', marginTop: 16 }]}>
+            {early ? 'Jsi u toho od začátku – a tvoje první věc může být ta, která to tu rozjede. 🚀' : 'Čím víc lidí daruje, tím víc věcí najdeš kolem sebe.'}
+          </Text>
+        </FadeIn>
+      </View>
+    </StepLayout>
+  );
+}
+
 // ---------- Mapa sousedů v onboardingu (bez vymyšlených dat) ----------
 var NeighborsMap = function NeighborsMap({ next, ctx }) {
   const pulse = useRef(new Animated.Value(0)).current;
@@ -3247,6 +3315,8 @@ NotifyGive.tip = 'Ozvu se, jen když se něco děje.';
 GiftStep.tip = 'Pssst… mám pro tebe dárek!';
 GiftStep.mood = 'wow';
 FirstItem.tip = 'Hezká fotka = rychlejší zájemce 📸';
+CommunityStep.tip = 'Tohle jsou skutečná čísla, žádné výmysly 😉';
+CommunityStep.mood = 'excited';
 TakeCategories.tip = 'Ahoj, já jsem Taki! Pomůžu ti najít poklady.';
 TakeSavings.tip = 'Zdarma je nejlepší cena 😄';
 TakeSavings.mood = 'excited';
@@ -3255,8 +3325,8 @@ TakeCompare.mood = 'wink';
 TakeDistance.tip = 'Kam až dojdeš pěšky?';
 TakeDistance.mood = 'think';
 NotifyTake.tip = 'Dám vědět, když se objeví něco pro tebe.';
-var GIVE_STEPS = [GiveReason, GiveImpact, GiveWhat, GiveAmount, GivePickup, NeighborsMap, GiveSpeed, NotifyGive, SetupGive, GiftStep, FirstItem];
-var TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, NotifyTake, SetupTake, GiftStep, TakeDone];
+var GIVE_STEPS = [GiveReason, GiveImpact, GiveWhat, GiveAmount, GivePickup, NeighborsMap, GiveSpeed, CommunityStep, NotifyGive, SetupGive, GiftStep, FirstItem];
+var TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, CommunityStep, NotifyTake, SetupTake, GiftStep, TakeDone];
 
 var Root = function Root() {
   const [route, setRoute] = useState('loading');
@@ -3417,7 +3487,17 @@ var Root = function Root() {
       run(() => api.requestItem(uid || myId, item.id, msg), { title: 'Žádost odeslána 🙋', body: 'Dáme ti vědět, jakmile dárce odpoví.' }),
     accept: (id) => run(() => api.acceptRequest(id), { title: 'Potvrzeno 🎉', body: 'Zájemce dostal upozornění a tvůj kontakt. Po předání věc označ jako předanou.' }),
     decline: (id) => run(() => api.declineRequest(id)),
-    markGiven: (id) => run(() => api.markGiven(id), { title: 'Předáno ✅ +100 ⭐', body: 'Díky, že posíláš věci dál! 💜' }),
+    markGiven: async (id) => {
+      await run(() => api.markGiven(id), { title: 'Předáno ✅ +100 ⭐', body: 'Díky, že posíláš věci dál! 💜' });
+      // Hodnocení v App Store – systémové okno Apple, jen jednou a po dobrém zážitku
+      try {
+        const asked = await AsyncStorage.getItem('review_asked');
+        if (!asked && (await StoreReview.isAvailableAsync())) {
+          await AsyncStorage.setItem('review_asked', '1');
+          setTimeout(() => StoreReview.requestReview().catch(() => {}), 1500);
+        }
+      } catch (e) {}
+    },
     deleteItem: (id) => run(() => api.deleteItem(id)),
     report: (item, reason) =>
       ctx.requireLogin((uid) => run(() => api.reportItem(uid, item.id, reason), { title: 'Díky za nahlášení', body: 'Podíváme se na to. Po více nahlášeních se inzerát skryje automaticky.' })),

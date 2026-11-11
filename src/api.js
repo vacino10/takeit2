@@ -219,3 +219,11 @@ export async function fetchNotifications(uid) {
 export async function markNotificationsRead(uid) {
   await supabase.from('notifications').update({ read: true }).eq('user_id', uid).eq('read', false);
 }
+
+// ---------- Statistiky (skutečná čísla) ----------
+
+export async function publicStats() {
+  const { data, error } = await supabase.rpc('public_stats');
+  if (error) throw error;
+  return data;
+}
