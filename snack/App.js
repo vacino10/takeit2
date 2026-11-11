@@ -305,12 +305,20 @@ var impact = (style = 'Light') => {
 var success = () => {
   try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch (e) {}
 };
-// Delší haptika: série jemných impulzů po dobu animace (sílí ke konci), na konci volitelně „success“
-var rumble = (ms = 800, { every = 70, from = 'Light', to = 'Medium', end = null, delay = 0 } = {}) => {
-  const n = Math.max(1, Math.round(ms / every));
+// Souvislá vibrace, která postupně sílí (husté jemné impulzy splývají v jedno „vrnění“).
+// iOS přes Expo neumí skutečnou plynulou vibraci, tohle je nejbližší náhrada.
+var RAMP = ['Soft', 'Light', 'Medium', 'Rigid', 'Heavy'];
+var rumble = (ms = 800, { peak, end = null, delay = 0 } = {}) => {
+  const top = RAMP.indexOf(peak || (ms < 500 ? 'Medium' : 'Heavy'));
+  const step = 26;
+  const n = Math.max(1, Math.round(ms / step));
   const timers = [];
-  for (let i = 0; i < n; i++) timers.push(setTimeout(() => impact(i < n * 0.65 ? from : to), delay + i * every));
-  if (end) timers.push(setTimeout(() => (end === 'success' ? success() : impact(end)), delay + ms));
+  for (let i = 0; i < n; i++) {
+    const t = i / Math.max(1, n - 1);
+    const lvl = RAMP[Math.min(top, Math.floor(t * t * (top + 1)))];
+    timers.push(setTimeout(() => impact(lvl), delay + i * step));
+  }
+  if (end) timers.push(setTimeout(() => (end === 'success' ? success() : impact(end)), delay + ms + 40));
   return () => timers.forEach(clearTimeout);
 };
 var kc = (n) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -601,7 +609,7 @@ var Confetti = function Confetti({ run, count = 28 }) {
   ).current;
   useEffect(() => {
     if (!run) return;
-    const stop = rumble(520, { every: 55, from: 'Medium', to: 'Light' });
+    const stop = rumble(520, { peak: 'Medium' });
     Animated.stagger(
       14,
       parts.map((p) => Animated.timing(p.a, { toValue: 1, duration: 2100, easing: Easing.out(Easing.quad), useNativeDriver: true }))
@@ -645,7 +653,7 @@ var PointsPill = function PointsPill({ points }) {
     bump.setValue(1.3);
     Animated.spring(bump, { toValue: 1, friction: 3, useNativeDriver: true }).start();
     fly.setValue(0);
-    rumble(260, { every: 65, from: 'Light', to: 'Medium', end: 'Medium' });
+    rumble(300, { peak: 'Medium' });
     Animated.timing(fly, { toValue: 1, duration: 1300, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [points]);
   return (
@@ -1236,7 +1244,7 @@ var ClearAnim = function ClearAnim() {
   const anims = useRef(items.map(() => new Animated.Value(0))).current;
   const sparkle = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const stops = anims.map((_, i) => rumble(320, { every: 60, from: 'Light', to: 'Medium', end: 'Rigid', delay: 600 + i * 380 + 480 }));
+    const stops = [rumble(380 * (anims.length - 1) + 800, { delay: 600 })];
     Animated.sequence([
       Animated.delay(600),
       Animated.stagger(380, anims.map((a) => Animated.timing(a, { toValue: 1, duration: 800, easing: Easing.in(Easing.cubic), useNativeDriver: true }))),
@@ -1542,8 +1550,8 @@ var GiveSpeed = function GiveSpeed({ next }) {
   const a = useRef(new Animated.Value(0)).current;
   const b = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const stop1 = rumble(1300, { every: 85, from: 'Light', to: 'Light' });
-    const stop2 = rumble(900, { every: 70, from: 'Light', to: 'Medium', delay: 550, end: 'success' });
+    const stop1 = rumble(1500, { end: 'success' });
+    const stop2 = () => {};
     Animated.stagger(550, [
       Animated.timing(a, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
       Animated.timing(b, { toValue: 1, duration: 950, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
@@ -1701,7 +1709,7 @@ var Setup = function Setup({ next, title, items, emoji }) {
   useEffect(() => {
     const a = new Animated.Value(0);
     const id = a.addListener(({ value }) => setP(Math.round(value)));
-    const stop = rumble(5000, { every: 150, from: 'Light', to: 'Medium' });
+    const stop = rumble(5100, { peak: 'Rigid' });
     Animated.timing(a, { toValue: 100, duration: 5200, easing: Easing.inOut(Easing.quad), useNativeDriver: false }).start(() => {
       success();
       setTimeout(next, 800);
@@ -1720,7 +1728,7 @@ var Setup = function Setup({ next, title, items, emoji }) {
   const per = 100 / items.length;
   const doneCount = Math.floor(p / per);
   useEffect(() => {
-    if (doneCount > 0) impact('Heavy');
+    // (vibrace běží souvisle přes rumble)
   }, [doneCount]);
   return (
     <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
@@ -1872,7 +1880,7 @@ var GiftStep = function GiftStep({ next, ctx }) {
       Animated.timing(shake, { toValue: 0, duration: 85, useNativeDriver: true }),
     ]).start();
     Animated.spring(grow, { toValue: 1 + t * 0.12, friction: 4, useNativeDriver: true }).start();
-    rumble(t < 3 ? 240 : 650, { every: t < 3 ? 60 : 45, from: 'Medium', to: t < 3 ? 'Medium' : 'Heavy' });
+    if (t >= 3) rumble(650, { peak: 'Heavy' });
     if (t >= 3) {
       setTimeout(() => {
         setOpen(true);
@@ -2047,8 +2055,8 @@ var TakeSavings = function TakeSavings({ next }) {
   useEffect(() => {
     const a = new Animated.Value(0);
     const id = a.addListener(({ value }) => setTotal(Math.round(value / 10) * 10));
-    const stops = rows.map((_, i) => rumble(160, { every: 55, from: 'Light', to: 'Light', end: 'Medium', delay: 200 + i * 420 }));
-    stops.push(rumble(2200, { every: 90, from: 'Light', to: 'Medium', delay: rows.length * 420 + 400, end: 'success' }));
+    const stops = [];
+    stops.push(rumble(2200, { delay: rows.length * 420 + 400, end: 'success' }));
     Animated.timing(a, { toValue: sum, duration: 2200, delay: rows.length * 420 + 400, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
     return () => {
       a.removeListener(id);
@@ -2079,8 +2087,8 @@ var TakeCompare = function TakeCompare({ next }) {
   const a = useRef(new Animated.Value(0)).current;
   const b = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const stop1 = rumble(1300, { every: 85, from: 'Light', to: 'Light' });
-    const stop2 = rumble(900, { every: 70, from: 'Light', to: 'Medium', delay: 550, end: 'success' });
+    const stop1 = rumble(1500, { end: 'success' });
+    const stop2 = () => {};
     Animated.stagger(550, [
       Animated.timing(a, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
       Animated.timing(b, { toValue: 1, duration: 950, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
@@ -2438,7 +2446,7 @@ var CommunityStep = function CommunityStep({ next }) {
       .publicStats()
       .then((x) => {
         setStats(x);
-        stop = rumble(1900, { every: 95, from: 'Light', to: 'Medium', delay: 300, end: 'success' });
+        stop = rumble(1900, { delay: 300, end: 'success' });
       })
       .catch(() => setFailed(true));
     return () => stop();
