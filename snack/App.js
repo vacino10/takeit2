@@ -367,7 +367,18 @@ var rumble = (ms = 800, { peak, end = null, delay = 0 } = {}) => {
       id = -1;
     }
   }
-  if (id === -1) timers.push(setTimeout(() => impact('Soft'), delay));
+  if (id === -1) {
+    // Bez Core Haptics (Expo Go): pár jemných pulzů, které postupně sílí a zrychlují – jako nádech před koncem.
+    // Žádné rychlé ťukání: mezi pulzy je vždy aspoň ~120 ms.
+    const levels = ['Soft', 'Light', 'Light', 'Medium', 'Rigid', 'Heavy'];
+    const topIdx = Math.max(2, Math.min(levels.length - 1, Math.round((top / 1) * (levels.length - 1))));
+    const n = Math.max(3, Math.min(7, Math.round(ms / 320)));
+    for (let k = 0; k < n; k++) {
+      const t = 1 - Math.pow(1 - (k + 1) / (n + 1), 1.6); // pulzy se ke konci zahušťují
+      const lvl = levels[Math.round((k / Math.max(1, n - 1)) * topIdx)];
+      timers.push(setTimeout(() => impact(lvl), delay + Math.round(t * ms)));
+    }
+  }
   if (end) timers.push(setTimeout(() => (end === 'success' ? success() : impact(end)), delay + ms + 40));
   return () => {
     timers.forEach(clearTimeout);
@@ -828,27 +839,6 @@ var IconBadge = function IconBadge({ name, size = 84 }) {
   );
 }
 
-var Blobs = function Blobs() {
-  const a = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(a, { toValue: 1, duration: 6000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(a, { toValue: 0, duration: 6000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Animated.View
-        style={[st.blob, { top: -80, right: -90, transform: [{ translateX: a.interpolate({ inputRange: [0, 1], outputRange: [0, -30] }) }, { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, 24] }) }] }]}
-      />
-      <Animated.View
-        style={[st.blob, { bottom: -120, left: -110, backgroundColor: '#F6F0FF', transform: [{ translateX: a.interpolate({ inputRange: [0, 1], outputRange: [0, 34] }) }, { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, -20] }) }] }]}
-      />
-    </View>
-  );
-}
 
 // ---------- Flow (progress + kroky) ----------
 var Flow = function Flow({ steps, onExit, onFinish, ctx }) {
@@ -871,7 +861,6 @@ var Flow = function Flow({ steps, onExit, onFinish, ctx }) {
   const Step = steps[i];
   return (
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
-      <Blobs />
       {!Step.hideHeader && (
         <View style={st.header}>
           <Pressable onPress={back} hitSlop={14} style={st.backBtn}>
@@ -962,7 +951,6 @@ var Welcome = function Welcome({ onStart }) {
   ];
   return (
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
-      <Blobs />
       <View style={{ height: 330 }}>
         {picks.map((it, i) => {
           const { rot, ...p } = pos[i];
@@ -1002,7 +990,6 @@ var Intro = function Intro({ onPick }) {
   }, []);
   return (
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
-      <Blobs />
       <View style={{ flex: 1, paddingHorizontal: 24 }}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <FadeIn>
@@ -3893,7 +3880,6 @@ var st = StyleSheet.create({
   bubbleTail: { position: 'absolute', left: -6, top: '50%', marginTop: -6, width: 12, height: 12, backgroundColor: '#FFFFFF', transform: [{ rotate: '45deg' }], borderLeftWidth: 1, borderBottomWidth: 1, borderColor: '#EFE8FF' },
   bubbleTxt: { fontSize: 15, fontWeight: '600', color: INK, lineHeight: 20 },
   guideRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, marginTop: -4, marginBottom: 4 },
-  blob: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: '#F1EBFF', opacity: 0.8 },
   label: { fontSize: 15, fontWeight: '800', color: INK, marginTop: 16, marginBottom: 8 },
   inputSm: { paddingVertical: 12, fontSize: 16, marginTop: 10 },
   addPhoto: { width: 78, height: 78, borderRadius: 16, borderWidth: 2, borderStyle: 'dashed', borderColor: '#D4D4D8', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
