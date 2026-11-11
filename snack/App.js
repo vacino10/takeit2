@@ -1,6 +1,6 @@
 // TAKE.it – Pošli to dál.
 // Verze pro Expo Snack (vše v jednom souboru)
-import 'react-native-url-polyfill/auto';
+import { setupURLPolyfill } from 'react-native-url-polyfill';
 import { createClient } from '@supabase/supabase-js';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Device from 'expo-device';
@@ -57,6 +57,7 @@ try {
 } catch (e) {}
 
 
+setupURLPolyfill();
 const SUPABASE_URL = 'https://zkhezjbvmefyqfcuytjz.supabase.co';
 let supabase = null; // vytvoří se po vložení klíče (KeySetup)
 const initSupabase = (key) => {
