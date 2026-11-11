@@ -132,6 +132,15 @@ function openContact(method, item) {
   Linking.openURL(url).catch(() => Alert.alert('Nejde otevřít', 'Tuhle appku nemáš v telefonu nainstalovanou.'));
 }
 
+// ---------- Sleva pro dárce ----------
+const TIERS = [
+  { n: 1, pct: 20 },
+  { n: 3, pct: 40 },
+  { n: 5, pct: 60 },
+];
+const discountFor = (n) => TIERS.reduce((d, t) => (n >= t.n ? t.pct : d), 0);
+const nextTier = (n) => TIERS.find((t) => n < t.n);
+
 // ---------- UI základ ----------
 function Logo({ size = 40, color = B }) {
   return (
@@ -961,15 +970,16 @@ const SetupGive = (p) => (
 );
 SetupGive.hideHeader = true;
 
-function FirstItem({ next, ctx }) {
+function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideSkip }) {
+  const saved = ctx.data.savedContact || {};
   const [photos, setPhotos] = useState([]);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [chip, setChip] = useState('U dveří');
-  const [methods, setMethods] = useState(['whatsapp']);
-  const [phone, setPhone] = useState('+420 ');
-  const [messenger, setMessenger] = useState('');
-  const [email, setEmail] = useState('');
+  const [methods, setMethods] = useState(saved.methods || ['whatsapp']);
+  const [phone, setPhone] = useState(saved.phone || '+420 ');
+  const [messenger, setMessenger] = useState(saved.messenger || '');
+  const [email, setEmail] = useState(saved.email || '');
   const pick = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
@@ -996,7 +1006,7 @@ function FirstItem({ next, ctx }) {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
         <FadeIn>
-          <Text style={st.h1}>Daruj svou první věc</Text>
+          <Text style={st.h1}>{heading}</Text>
           <Text style={st.sub}>Přidej ji teď – sousedé v okolí ji uvidí hned.</Text>
         </FadeIn>
         <Pressable onPress={pick} style={st.photoBox}>
@@ -1111,14 +1121,18 @@ function FirstItem({ next, ctx }) {
         <Text style={[st.chartAxis, { marginTop: 10 }]}>🔒 Kontakt uvidí jen lidé, kteří o věc projeví zájem.</Text>
       </ScrollView>
       <View style={{ paddingHorizontal: 24 }}>
-        <Pressable onPress={next} hitSlop={10}>
-          <Text style={st.secondary}>Udělám to později</Text>
-        </Pressable>
+        {hideSkip ? null : (
+          <Pressable onPress={next} hitSlop={10}>
+            <Text style={st.secondary}>Udělám to později</Text>
+          </Pressable>
+        )}
         <Button
           title="Zveřejnit"
           disabled={!valid}
           onPress={() => {
-            ctx.set('item', {
+            const contact = { methods, phone: phone.trim(), messenger: messenger.trim(), email: email.trim() };
+            ctx.set('savedContact', contact);
+            ctx.addItem({
               t: title.trim(),
               d: desc.trim(),
               uri: photos[0],
@@ -1127,7 +1141,7 @@ function FirstItem({ next, ctx }) {
               km: '0',
               m: 0,
               g: [B_LIGHT, '#DCCFFF'],
-              contact: { methods, phone: phone.trim(), messenger: messenger.trim(), email: email.trim() },
+              contact,
             });
             success();
             next();
@@ -1146,7 +1160,7 @@ function ItemDetail({ item, onClose, ctx }) {
   const own = !item.demo;
   const status = ctx.outReq[item.t];
   const methods = (item.contact && item.contact.methods) || [];
-  const incoming = ctx.requests;
+  const incoming = ctx.requests.filter((r) => r.itemId === item.id);
   const pending = incoming.filter((r) => r.status === 'pending').length;
   return (
     <Modal visible={!!item} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -1169,21 +1183,44 @@ function ItemDetail({ item, onClose, ctx }) {
               <View style={[st.chartCard, { marginTop: 26 }]}>
                 <Text style={st.h2}>Tohle je tvoje věc</Text>
                 <Text style={st.chartAxis}>
-                  {ctx.data.ownReserved
-                    ? '✅ Rezervováno – zájemce dostal tvůj kontakt.'
+                  {item.status === 'given'
+                    ? '✅ Předáno – díky, že posíláš věci dál!'
+                    : item.status === 'reserved'
+                    ? '🤝 Rezervováno – zájemce dostal tvůj kontakt.'
                     : incoming.length
                     ? `Zájemci: ${incoming.length}${pending ? ` • čeká na tebe ${pending}` : ''}`
                     : 'Zatím se nikdo nehlásil. Jakmile ano, přijde ti upozornění.'}
                 </Text>
-                {incoming.length ? (
+                {pending ? (
                   <Button
-                    title={`Zobrazit zájemce (${incoming.length})`}
+                    title={`Zobrazit zájemce (${pending})`}
                     style={{ marginTop: 14, marginBottom: 0 }}
                     onPress={() => {
                       onClose();
-                      setTimeout(() => ctx.openInbox(), 450);
+                      ctx.openInbox();
                     }}
                   />
+                ) : null}
+                {item.status === 'reserved' ? (
+                  <Button
+                    title="Označit jako předané ✅"
+                    style={{ marginTop: 14, marginBottom: 0 }}
+                    onPress={() => {
+                      ctx.markGiven(item.id);
+                      onClose();
+                    }}
+                  />
+                ) : null}
+                {item.status !== 'given' ? (
+                  <Pressable
+                    onPress={() => {
+                      ctx.deleteItem(item.id);
+                      onClose();
+                    }}
+                    hitSlop={10}
+                  >
+                    <Text style={[st.secondary, { marginTop: 16, marginBottom: 0, color: '#FF3B30' }]}>Smazat inzerát</Text>
+                  </Pressable>
                 ) : null}
               </View>
             ) : status === 'accepted' ? (
@@ -1246,66 +1283,6 @@ function timeAgo(d) {
   return m < 1 ? 'právě teď' : `před ${m} min`;
 }
 
-function Inbox({ ctx }) {
-  const item = ctx.data.item;
-  return (
-    <Modal visible={ctx.inbox} animationType="slide" presentationStyle="pageSheet" onRequestClose={ctx.closeInbox}>
-      <View style={{ flex: 1, backgroundColor: '#fff' }}>
-        <View style={st.inboxHeader}>
-          <Text style={st.h2}>Zájemci</Text>
-          <Pressable onPress={ctx.closeInbox} hitSlop={12}>
-            <Text style={{ fontSize: 17, color: B, fontWeight: '700' }}>Hotovo</Text>
-          </Pressable>
-        </View>
-        <ScrollView contentContainerStyle={{ padding: 24 }}>
-          {item ? (
-            <View style={[st.itemCard, { flexDirection: 'row', alignItems: 'center', marginBottom: 18 }]}>
-              <LinearGradient colors={item.g} style={{ width: 64, height: 64, alignItems: 'center', justifyContent: 'center' }}>
-                {item.uri ? <Image source={{ uri: item.uri }} style={StyleSheet.absoluteFill} /> : <Text style={{ fontSize: 28 }}>{item.e}</Text>}
-              </LinearGradient>
-              <View style={{ padding: 12, flex: 1 }}>
-                <Text style={st.itemTitle}>{item.t}</Text>
-                <Text style={st.itemMeta}>{ctx.data.ownReserved ? '✅ Rezervováno' : 'Zdarma • aktivní'}</Text>
-              </View>
-            </View>
-          ) : null}
-          {ctx.requests.length === 0 ? (
-            <View style={{ alignItems: 'center', marginTop: 40 }}>
-              <Text style={{ fontSize: 48 }}>📭</Text>
-              <Text style={[st.h2, { marginTop: 10 }]}>Zatím nikdo</Text>
-              <Text style={[st.chartAxis, { textAlign: 'center' }]}>Jakmile se někdo přihlásí, přijde ti upozornění.</Text>
-            </View>
-          ) : null}
-          {ctx.requests.map((r, i) => (
-            <FadeIn key={r.id} delay={i * 80} style={[st.reqCard, r.status === 'declined' && { opacity: 0.5 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={st.avatar}>
-                  <Text style={{ fontSize: 24 }}>{r.e}</Text>
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={st.h2}>{r.from}</Text>
-                  <Text style={st.chartAxis}>{r.km} km od tebe • {timeAgo(r.at)}</Text>
-                </View>
-              </View>
-              <Text style={[st.body, { marginTop: 10 }]}>„{r.msg}“</Text>
-              {r.status === 'pending' ? (
-                <View style={{ flexDirection: 'row', marginTop: 12 }}>
-                  <Button title="Potvrdit" style={{ flex: 1, height: 48, marginRight: 8, marginBottom: 0 }} onPress={() => ctx.accept(r.id)} />
-                  <Button title="Odmítnout" light style={{ flex: 1, height: 48, marginBottom: 0 }} onPress={() => ctx.decline(r.id)} />
-                </View>
-              ) : (
-                <Text style={[st.chartAxis, { marginTop: 10, fontWeight: '700', color: r.status === 'accepted' ? GREEN : SUB }]}>
-                  {r.status === 'accepted' ? '✅ Potvrzeno – poslali jsme mu tvůj kontakt' : 'Odmítnuto'}
-                </Text>
-              )}
-            </FadeIn>
-          ))}
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-}
-
 function Toast({ toast, onPress, onHide }) {
   const insets = useSafeAreaInsets();
   const a = useRef(new Animated.Value(0)).current;
@@ -1335,45 +1312,119 @@ function Toast({ toast, onPress, onHide }) {
   );
 }
 
-const GIVE_STEPS = [GiveReason, GiveImpact, GivePickup, NeighborsMap, GiveSpeed, NotifyGive, SetupGive, FirstItem];
+function DonorPerks({ next }) {
+  const steps = useRef(TIERS.map(() => new Animated.Value(0))).current;
+  const [price, setPrice] = useState(99);
+  const [active, setActive] = useState(-1);
+  useEffect(() => {
+    const ts = TIERS.map((t, i) =>
+      setTimeout(() => {
+        setActive(i);
+        setPrice(Math.round(99 * (1 - t.pct / 100)));
+        tap();
+        Animated.spring(steps[i], { toValue: 1, friction: 5, useNativeDriver: true }).start();
+        if (i === TIERS.length - 1) success();
+      }, 700 + i * 1000)
+    );
+    return () => ts.forEach(clearTimeout);
+  }, []);
+  return (
+    <StepLayout
+      title="Dárci mají TAKE.IT Plus levněji"
+      subtitle="Za každou věc, kterou daruješ, ti zlevníme předplatné. S ním uvidíš všechny věci zdarma kolem sebe."
+      onNext={next}
+    >
+      <View style={{ flex: 1, justifyContent: 'center' }}>
+        <FadeIn style={[st.chartCard, { alignItems: 'center', paddingVertical: 26 }]}>
+          <Text style={st.chartAxis}>TAKE.IT Plus • první měsíc</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 6 }}>
+            {price < 99 ? <Text style={[st.strike, { fontSize: 22, marginBottom: 10 }]}>99 Kč</Text> : null}
+            <Text style={[st.bigNum, { fontSize: 64 }]}>{price} Kč</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 24, width: '100%', justifyContent: 'space-between' }}>
+            <View style={st.perkLine} />
+            {TIERS.map((t, i) => (
+              <View key={t.n} style={{ alignItems: 'center', width: 90 }}>
+                <Animated.View
+                  style={[
+                    st.perkDot,
+                    i <= active && { backgroundColor: B, borderColor: B },
+                    { transform: [{ scale: steps[i].interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.35, 1] }) }] },
+                  ]}
+                >
+                  <Text style={{ fontSize: 22 }}>{i <= active ? '🎁' : '📦'}</Text>
+                </Animated.View>
+                <Text style={[st.h2, { marginTop: 8, color: i <= active ? B : SUB }]}>−{t.pct} %</Text>
+                <Text style={st.chartAxis}>{t.n} {t.n === 1 ? 'věc' : t.n < 5 ? 'věci' : 'věcí'}</Text>
+              </View>
+            ))}
+          </View>
+        </FadeIn>
+        <FadeIn delay={3600}>
+          <Text style={[st.sub, { textAlign: 'center', marginTop: 22 }]}>Darování je vždycky zdarma. 💜</Text>
+        </FadeIn>
+      </View>
+    </StepLayout>
+  );
+}
 
-function Given({ ctx, onBrowse, onRestart }) {
-  const item = ctx.data.item;
-  const n = ctx.requests.length;
+function DiscountUnlocked({ count }) {
+  const pct = discountFor(count);
+  const a = useRef(new Animated.Value(0)).current;
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const id = a.addListener(({ value }) => setShown(Math.round(value)));
+    Animated.timing(a, { toValue: pct, duration: 1200, delay: 600, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => pct && success());
+    return () => a.removeListener(id);
+  }, [pct]);
+  const nt = nextTier(count);
+  if (!pct) return null;
+  return (
+    <View style={[st.statusCard, { marginTop: 16, backgroundColor: B }]}>
+      <Text style={{ color: '#fff', fontWeight: '700' }}>Odemkl sis slevu pro dárce</Text>
+      <Text style={{ color: '#fff', fontWeight: '900', fontSize: 48 }}>−{shown} %</Text>
+      <Text style={{ color: '#EDE5FF', textAlign: 'center' }}>
+        na TAKE.IT Plus{nt ? ` • daruj ještě ${nt.n - count} a máš −${nt.pct} %` : ' • maximální sleva 🎉'}
+      </Text>
+    </View>
+  );
+}
+
+const SetupGiveWrap = SetupGive;
+const GIVE_STEPS = [GiveReason, GiveImpact, GivePickup, NeighborsMap, GiveSpeed, DonorPerks, NotifyGive, SetupGiveWrap, FirstItem];
+
+function Given({ ctx, onContinue, onRestart }) {
+  const item = ctx.myItems[ctx.myItems.length - 1];
+  const n = item ? ctx.requests.filter((r) => r.itemId === item.id).length : 0;
   return (
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
-      <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, justifyContent: 'center', paddingVertical: 20 }}>
         <FadeIn style={{ alignItems: 'center' }}>
           <Text style={{ fontSize: 64 }}>🎉</Text>
           <Text style={[st.h1, { textAlign: 'center' }]}>{item ? 'Tvoje věc je venku!' : 'Vše nastaveno!'}</Text>
           <Text style={[st.sub, { textAlign: 'center' }]}>
-            {item ? 'Dáme ti vědět, jakmile si o ni někdo řekne.' : 'Věc můžeš přidat kdykoli tlačítkem + Darovat.'}
+            {item ? 'Dáme ti vědět, jakmile si o ni někdo řekne.' : 'Věc můžeš přidat kdykoli tlačítkem ＋ dole.'}
           </Text>
         </FadeIn>
         {item ? (
-          <FadeIn delay={250} style={[st.itemCard, { marginTop: 28, flexDirection: 'row', alignItems: 'center' }]}>
-            <LinearGradient colors={item.g} style={{ width: 96, height: 96, alignItems: 'center', justifyContent: 'center' }}>
+          <FadeIn delay={250} style={[st.itemCard, { marginTop: 24, flexDirection: 'row', alignItems: 'center' }]}>
+            <LinearGradient colors={item.g} style={{ width: 88, height: 88, alignItems: 'center', justifyContent: 'center' }}>
               {item.uri ? <Image source={{ uri: item.uri }} style={StyleSheet.absoluteFill} /> : <Text style={{ fontSize: 40 }}>{item.e}</Text>}
             </LinearGradient>
             <View style={{ padding: 14, flex: 1 }}>
               <Text style={st.itemTitle}>{item.t}</Text>
               <Text style={{ color: GREEN, fontWeight: '800', marginTop: 4 }}>Zdarma</Text>
-              <Text style={st.itemMeta}>Praha • právě teď • {item.chip}</Text>
-              {item.contact ? (
-                <Text style={st.itemMeta}>
-                  Kontakt: {CONTACTS.filter((c) => item.contact.methods.includes(c.id)).map((c) => c.e).join(' ')}
-                </Text>
-              ) : null}
+              <Text style={st.itemMeta}>
+                Kontakt: {CONTACTS.filter((c) => item.contact.methods.includes(c.id)).map((c) => c.e).join(' ')}
+              </Text>
             </View>
           </FadeIn>
         ) : null}
+        {item ? <DiscountUnlocked count={ctx.myItems.length} /> : null}
         {item ? (
           <FadeIn delay={500} style={[st.statusCard, { marginTop: 16 }]}>
             {n ? (
-              <>
-                <Text style={st.h2}>🙋 Zájemci: {n}</Text>
-                <Button title="Zobrazit zájemce" style={{ marginTop: 12, marginBottom: 0, alignSelf: 'stretch' }} onPress={ctx.openInbox} />
-              </>
+              <Text style={st.h2}>🙋 Zájemci: {n} – najdeš je v Aktivitě</Text>
             ) : (
               <>
                 <ActivityIndicator color={B} />
@@ -1384,9 +1435,9 @@ function Given({ ctx, onBrowse, onRestart }) {
             )}
           </FadeIn>
         ) : null}
-      </View>
+      </ScrollView>
       <View style={{ paddingHorizontal: 24 }}>
-        <Button title="Prohlédnout věci zdarma" onPress={onBrowse} />
+        <Button title="Pokračovat do appky" onPress={onContinue} />
         <Pressable onPress={onRestart} hitSlop={10}>
           <Text style={[st.secondary, { marginBottom: 0, marginTop: 14 }]}>Začít znovu (test)</Text>
         </Pressable>
@@ -1544,14 +1595,15 @@ const SetupTake = (p) => (
 );
 SetupTake.hideHeader = true;
 
-function Paywall({ visible, onClose, onUnlock }) {
+function Paywall({ visible, onClose, onUnlock, discount = 0 }) {
   const [plan, setPlan] = useState('year');
   const [busy, setBusy] = useState(false);
+  const f = (p) => Math.round(p * (1 - discount / 100));
   const plans = [
-    { id: 'year', name: 'Roční', price: '499 Kč', note: '41 Kč měsíčně', badge: 'Nejvýhodnější' },
-    { id: 'month', name: 'Měsíční', price: '99 Kč', note: 'měsíčně' },
-    { id: 'week', name: 'Týdenní', price: '39 Kč', note: 'týdně' },
-  ];
+    { id: 'year', name: 'Roční', base: 499, note: discount ? 'první rok' : '41 Kč měsíčně', badge: 'Nejvýhodnější' },
+    { id: 'month', name: 'Měsíční', base: 99, note: discount ? 'první měsíc, pak 99 Kč' : 'měsíčně' },
+    { id: 'week', name: 'Týdenní', base: 39, note: discount ? 'první týden, pak 39 Kč' : 'týdně' },
+  ].map((p) => ({ ...p, price: `${f(p.base)} Kč`, old: discount ? `${p.base} Kč` : null }));
   const buy = () => {
     setBusy(true);
     setTimeout(() => {
@@ -1572,6 +1624,15 @@ function Paywall({ visible, onClose, onUnlock }) {
               <AppIcon size={88} />
               <Text style={[st.h1, { textAlign: 'center', marginTop: 20 }]}>Odemkni TAKE.IT Plus</Text>
               <Text style={[st.sub, { textAlign: 'center' }]}>Nejlepší věci zmizí rychle. Buď u nich první.</Text>
+              {discount ? (
+                <View style={[st.discountPill, { marginTop: 14 }]}>
+                  <Text style={{ color: '#fff', fontWeight: '800' }}>🎁 Sleva pro dárce −{discount} % je započítaná</Text>
+                </View>
+              ) : (
+                <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 12 }]}>
+                  💡 Daruj věc a získáš slevu až −60 %
+                </Text>
+              )}
             </View>
             <View style={{ marginTop: 22 }}>
               {['Všechny věci zdarma ve tvém okolí', 'Okamžitá upozornění na nové věci', 'Rezervace jedním klepnutím', 'Bez reklam'].map((t) => (
@@ -1600,7 +1661,10 @@ function Paywall({ visible, onClose, onUnlock }) {
                     <Text style={st.h2}>{p.name}</Text>
                     <Text style={st.chartAxis}>{p.note}</Text>
                   </View>
-                  <Text style={[st.h2, { color: plan === p.id ? B : INK }]}>{p.price}</Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    {p.old ? <Text style={[st.strike, { marginRight: 0, fontSize: 13 }]}>{p.old}</Text> : null}
+                    <Text style={[st.h2, { color: plan === p.id ? B : INK }]}>{p.price}</Text>
+                  </View>
                   {p.badge ? (
                     <View style={st.planBadge}>
                       <Text style={st.planBadgeTxt}>{p.badge}</Text>
@@ -1646,9 +1710,13 @@ function LockedFeed({ next, ctx }) {
       </View>
       <View style={{ paddingHorizontal: 24 }}>
         <Button title="Odemknout TAKE.IT" onPress={() => setPay(true)} />
+        <Pressable onPress={next} hitSlop={10}>
+          <Text style={[st.secondary, { marginTop: 8, marginBottom: 0 }]}>Teď ne</Text>
+        </Pressable>
       </View>
       <Paywall
         visible={pay}
+        discount={discountFor(ctx.myItems.length)}
         onClose={() => setPay(false)}
         onUnlock={() => {
           setPay(false);
@@ -1662,12 +1730,22 @@ function LockedFeed({ next, ctx }) {
 
 const TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, NotifyTake, SetupTake, LockedFeed];
 
-// ---------- Hlavní feed ----------
-function Feed({ ctx, onGive, onRestart }) {
+// ---------- Hlavní appka (záložky) ----------
+function Header({ title, right }) {
+  return (
+    <View style={st.feedHeader}>
+      {title ? <Text style={[st.h1, { fontSize: 30 }]}>{title}</Text> : <Logo size={30} />}
+      {right}
+    </View>
+  );
+}
+
+function HomeTab({ ctx }) {
   const [open, setOpen] = useState(null);
-  const own = ctx.data.item
-    ? [{ ...ctx.data.item, badge: ctx.data.ownReserved ? 'REZERVOVÁNO' : 'TVOJE', badgeColor: ctx.data.ownReserved ? '#FF9500' : B }]
-    : [];
+  const [pay, setPay] = useState(false);
+  const own = ctx.myItems
+    .filter((x) => x.status !== 'given')
+    .map((x) => ({ ...x, badge: x.status === 'reserved' ? 'REZERVOVÁNO' : 'TVOJE', badgeColor: x.status === 'reserved' ? '#FF9500' : B }));
   const items = [
     ...own,
     ...ITEMS.map((it) =>
@@ -1678,52 +1756,384 @@ function Feed({ ctx, onGive, onRestart }) {
         : it
     ),
   ];
-  const pending = ctx.requests.filter((r) => r.status === 'pending').length;
-  const current = open ? items.find((x) => x.t === open.t) || open : null;
+  const current = open ? items.find((x) => (x.id || x.t) === (open.id || open.t)) || null : null;
+  const disc = discountFor(ctx.myItems.length);
   return (
-    <SafeAreaView style={st.safe} edges={['top']}>
-      <View style={st.feedHeader}>
-        <Logo size={30} />
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable onPress={ctx.openInbox} hitSlop={10} style={{ marginRight: 18 }}>
-            <Text style={{ fontSize: 24 }}>🔔</Text>
-            {pending ? (
-              <View style={st.bellBadge}>
-                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{pending}</Text>
-              </View>
-            ) : null}
-          </Pressable>
-          <Pressable onPress={onRestart} hitSlop={10}>
-            <Text style={{ color: SUB, fontWeight: '600' }}>Reset</Text>
-          </Pressable>
+    <View style={{ flex: 1 }}>
+      <Header />
+      {ctx.data.unlocked ? (
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
+          <Text style={[st.h2, { marginBottom: 4 }]}>Zdarma kolem tebe</Text>
+          <Text style={[st.chartAxis, { marginBottom: 14 }]}>Praha • do {ctx.data.km || 5} km</Text>
+          <Grid
+            items={items}
+            onItem={(it) => {
+              tap();
+              setOpen(it);
+            }}
+          />
+        </ScrollView>
+      ) : (
+        <View style={{ flex: 1 }}>
+          <View style={{ paddingHorizontal: 24 }}>
+            <Text style={[st.h2, { fontSize: 22 }]}>37 věcí zdarma kolem tebe</Text>
+            <Text style={st.chartAxis}>Do {ctx.data.km || 5} km • přidáno za poslední hodinu</Text>
+          </View>
+          <View style={{ flex: 1, marginTop: 14, overflow: 'hidden' }}>
+            <View style={{ paddingHorizontal: 24 }} pointerEvents="none">
+              <Grid items={ITEMS.slice(0, 8)} />
+            </View>
+            <BlurView intensity={28} tint="light" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
+            <View style={[st.lockCard, { top: '18%' }]}>
+              <Text style={{ fontSize: 40 }}>🔒</Text>
+              <Text style={[st.h2, { textAlign: 'center', marginTop: 6 }]}>Odemkni všechny věci</Text>
+              {disc ? (
+                <View style={[st.discountPill, { marginTop: 10 }]}>
+                  <Text style={{ color: '#fff', fontWeight: '800' }}>🎁 Máš slevu −{disc} % jako dárce</Text>
+                </View>
+              ) : (
+                <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 4 }]}>💡 Daruj věc a získáš slevu až −60 %</Text>
+              )}
+              <Button title="Odemknout" style={{ alignSelf: 'stretch', marginTop: 14, marginBottom: 0 }} onPress={() => setPay(true)} />
+            </View>
+          </View>
         </View>
-      </View>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}>
-        <Text style={[st.h2, { marginBottom: 4 }]}>Zdarma kolem tebe</Text>
-        <Text style={[st.chartAxis, { marginBottom: 14 }]}>Praha • do {ctx.data.km || 5} km</Text>
-        <Grid
-          items={items}
-          onItem={(it) => {
-            tap();
-            setOpen(it);
-          }}
-        />
-      </ScrollView>
-      <Pressable
-        onPress={() => {
-          tap();
-          onGive();
-        }}
-        style={st.fab}
-      >
-        <Text style={{ color: '#fff', fontWeight: '800', fontSize: 17 }}>＋ Darovat</Text>
-      </Pressable>
+      )}
       <ItemDetail item={current} onClose={() => setOpen(null)} ctx={ctx} />
+      <Paywall
+        visible={pay}
+        discount={disc}
+        onClose={() => setPay(false)}
+        onUnlock={() => {
+          setPay(false);
+          ctx.set('unlocked', true);
+        }}
+      />
+    </View>
+  );
+}
+
+const STATUS_TABS = [
+  ['active', 'Aktivní'],
+  ['reserved', 'Rezervované'],
+  ['given', 'Předané'],
+];
+
+function MyItemsTab({ ctx }) {
+  const [seg, setSeg] = useState('active');
+  const [open, setOpen] = useState(null);
+  const list = ctx.myItems.filter((x) => x.status === seg);
+  const current = open ? ctx.myItems.find((x) => x.id === open) || null : null;
+  const n = ctx.myItems.length;
+  const nt = nextTier(n);
+  return (
+    <View style={{ flex: 1 }}>
+      <Header title="Moje věci" />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
+        <View style={[st.chartCard, { flexDirection: 'row', alignItems: 'center', marginBottom: 16 }]}>
+          <Text style={{ fontSize: 34 }}>🎁</Text>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={st.h2}>{discountFor(n) ? `Sleva pro dárce −${discountFor(n)} %` : 'Získej slevu pro dárce'}</Text>
+            <Text style={st.chartAxis}>{nt ? `Daruj ještě ${nt.n - n} → −${nt.pct} % na TAKE.IT Plus` : 'Máš maximální slevu 🎉'}</Text>
+            <View style={[st.hTrack, { height: 8 }]}>
+              <View style={[st.hBar, { backgroundColor: B, width: `${Math.min(100, (n / 5) * 100)}%` }]} />
+            </View>
+          </View>
+        </View>
+        <View style={st.segment}>
+          {STATUS_TABS.map(([k, l]) => {
+            const c = ctx.myItems.filter((x) => x.status === k).length;
+            return (
+              <Pressable
+                key={k}
+                onPress={() => {
+                  tap();
+                  setSeg(k);
+                }}
+                style={[st.segBtn, seg === k && st.segBtnOn]}
+              >
+                <Text style={[st.segTxt, seg === k && { color: INK }]}>
+                  {l}
+                  {c ? ` ${c}` : ''}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {list.length === 0 ? (
+          <View style={{ alignItems: 'center', marginTop: 40 }}>
+            <Text style={{ fontSize: 48 }}>{seg === 'given' ? '🤝' : '📦'}</Text>
+            <Text style={[st.h2, { marginTop: 10 }]}>{seg === 'active' ? 'Nic tu zatím není' : seg === 'reserved' ? 'Žádné rezervace' : 'Zatím nic předaného'}</Text>
+            {seg === 'active' ? <Button title="＋ Darovat věc" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={ctx.openAdd} /> : null}
+          </View>
+        ) : null}
+        {list.map((it, i) => {
+          const req = ctx.requests.filter((r) => r.itemId === it.id);
+          const pend = req.filter((r) => r.status === 'pending').length;
+          return (
+            <FadeIn key={it.id} delay={i * 60}>
+              <Pressable
+                onPress={() => {
+                  tap();
+                  setOpen(it.id);
+                }}
+                style={[st.itemCard, { flexDirection: 'row', alignItems: 'center', marginBottom: 12 }]}
+              >
+                <LinearGradient colors={it.g} style={{ width: 80, height: 80, alignItems: 'center', justifyContent: 'center' }}>
+                  {it.uri ? <Image source={{ uri: it.uri }} style={StyleSheet.absoluteFill} /> : <Text style={{ fontSize: 34 }}>{it.e}</Text>}
+                </LinearGradient>
+                <View style={{ padding: 12, flex: 1 }}>
+                  <Text style={st.itemTitle}>{it.t}</Text>
+                  <Text style={st.itemMeta}>
+                    {it.status === 'given' ? '✅ Předáno' : it.status === 'reserved' ? '🤝 Rezervováno' : `👀 ${it.views} zobrazení • 🙋 ${req.length}`}
+                  </Text>
+                  {pend ? <Text style={[st.itemMeta, { color: B, fontWeight: '800' }]}>Čeká na tebe {pend} {pend === 1 ? 'žádost' : 'žádosti'}</Text> : null}
+                </View>
+                <Text style={{ fontSize: 22, color: '#C7C7CC', marginRight: 12 }}>›</Text>
+              </Pressable>
+            </FadeIn>
+          );
+        })}
+      </ScrollView>
+      <ItemDetail item={current} onClose={() => setOpen(null)} ctx={ctx} />
+    </View>
+  );
+}
+
+function ActivityTab({ ctx }) {
+  const incoming = ctx.requests;
+  const outgoing = Object.entries(ctx.outReq);
+  return (
+    <View style={{ flex: 1 }}>
+      <Header title="Aktivita" />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
+        <Text style={st.section}>Žádosti o tvoje věci</Text>
+        {incoming.length === 0 ? (
+          <Text style={st.chartAxis}>Zatím nikdo. Jakmile se někdo přihlásí, přijde ti upozornění.</Text>
+        ) : null}
+        {[...incoming].reverse().map((r, i) => (
+          <FadeIn key={r.id} delay={i * 60} style={[st.reqCard, r.status === 'declined' && { opacity: 0.5 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={st.avatar}>
+                <Text style={{ fontSize: 24 }}>{r.e}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={st.h2}>{r.from}</Text>
+                <Text style={st.chartAxis}>chce „{r.itemT}“ • {r.km} km • {timeAgo(r.at)}</Text>
+              </View>
+            </View>
+            <Text style={[st.body, { marginTop: 10 }]}>„{r.msg}“</Text>
+            {r.status === 'pending' ? (
+              <View style={{ flexDirection: 'row', marginTop: 12 }}>
+                <Button title="Potvrdit" style={{ flex: 1, height: 48, marginRight: 8, marginBottom: 0 }} onPress={() => ctx.accept(r.id)} />
+                <Button title="Odmítnout" light style={{ flex: 1, height: 48, marginBottom: 0 }} onPress={() => ctx.decline(r.id)} />
+              </View>
+            ) : (
+              <Text style={[st.chartAxis, { marginTop: 10, fontWeight: '700', color: r.status === 'accepted' ? GREEN : SUB }]}>
+                {r.status === 'accepted' ? '✅ Potvrzeno – poslali jsme mu tvůj kontakt' : 'Odmítnuto'}
+              </Text>
+            )}
+          </FadeIn>
+        ))}
+        <Text style={[st.section, { marginTop: 28 }]}>Tvoje žádosti</Text>
+        {outgoing.length === 0 ? <Text style={st.chartAxis}>O nic sis zatím neřekl. Klepni ve feedu na věc a dej „Mám zájem“.</Text> : null}
+        {outgoing.map(([t, stt]) => {
+          const it = ITEMS.find((x) => x.t === t);
+          return (
+            <View key={t} style={[st.reqCard, { flexDirection: 'row', alignItems: 'center' }]}>
+              <View style={st.avatar}>
+                <Text style={{ fontSize: 24 }}>{it ? it.e : '🎁'}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={st.h2}>{t}</Text>
+                <Text style={[st.chartAxis, stt === 'accepted' && { color: GREEN, fontWeight: '700' }]}>
+                  {stt === 'accepted' ? '✅ Dárce potvrdil – kontakt odemčen' : '⏳ Čeká na potvrzení dárce'}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+function ProfileTab({ ctx, onRestart }) {
+  const [pay, setPay] = useState(false);
+  const given = ctx.myItems.length;
+  const got = Object.values(ctx.outReq).filter((x) => x === 'accepted').length;
+  const disc = discountFor(given);
+  const c = ctx.data.savedContact;
+  const name = ctx.data.name || '';
+  return (
+    <View style={{ flex: 1 }}>
+      <Header title="Profil" />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
+        <View style={{ alignItems: 'center' }}>
+          <View style={st.bigAvatar}>
+            <Text style={{ color: '#fff', fontSize: 40, fontWeight: '900' }}>{(name.trim()[0] || '🙂').toUpperCase()}</Text>
+          </View>
+          <TextInput
+            value={name}
+            onChangeText={(v) => ctx.set('name', v)}
+            placeholder="Tvoje jméno"
+            placeholderTextColor="#B5B5BA"
+            style={[st.h1, { fontSize: 26, textAlign: 'center', marginTop: 12, minWidth: 200 }]}
+          />
+          <Text style={st.chartAxis}>📍 Praha • na TAKE.IT od dneška</Text>
+        </View>
+        <View style={{ flexDirection: 'row', marginTop: 20 }}>
+          {[
+            [given, 'darováno'],
+            [got, 'získáno'],
+            [`~${given * 8} kg`, 'mimo skládku'],
+          ].map(([v, l]) => (
+            <View key={l} style={st.statBox}>
+              <Text style={[st.bigNum, { fontSize: 26 }]}>{v}</Text>
+              <Text style={st.chartAxis}>{l}</Text>
+            </View>
+          ))}
+        </View>
+        <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 6, fontSize: 12 }]}>Kila jsou orientační odhad.</Text>
+
+        <Text style={st.section}>TAKE.IT Plus</Text>
+        <View style={st.chartCard}>
+          <Text style={st.h2}>{ctx.data.unlocked ? '✅ Aktivní' : 'Neaktivní'}</Text>
+          <Text style={st.chartAxis}>
+            {disc ? `Tvoje sleva pro dárce: −${disc} %` : 'Daruj první věc a získáš −20 %'}
+            {nextTier(given) ? ` • další stupeň za ${nextTier(given).n - given} ${nextTier(given).n - given === 1 ? 'věc' : 'věci'}` : ''}
+          </Text>
+          {!ctx.data.unlocked ? <Button title="Aktivovat" style={{ marginTop: 12, marginBottom: 0 }} onPress={() => setPay(true)} /> : null}
+        </View>
+
+        <Text style={st.section}>Kontakt pro zájemce</Text>
+        <View style={st.chartCard}>
+          {c ? (
+            <>
+              <Text style={{ fontSize: 22 }}>{CONTACTS.filter((x) => c.methods.includes(x.id)).map((x) => x.e).join('  ')}</Text>
+              {c.phone && c.phone.length > 5 ? <Text style={st.chartAxis}>📱 {c.phone}</Text> : null}
+              {c.messenger ? <Text style={st.chartAxis}>⚡ m.me/{c.messenger}</Text> : null}
+              {c.email ? <Text style={st.chartAxis}>📧 {c.email}</Text> : null}
+              <Text style={[st.chartAxis, { marginTop: 6 }]}>Předvyplní se u každé další věci.</Text>
+            </>
+          ) : (
+            <Text style={st.chartAxis}>Uloží se, až přidáš první věc.</Text>
+          )}
+        </View>
+
+        <Text style={st.section}>Nastavení</Text>
+        <View style={[st.chartCard, { paddingVertical: 4 }]}>
+          {[
+            ['📍', 'Okruh', `${ctx.data.km || 5} km`],
+            ['🏷️', 'Kategorie', ctx.data.cats && ctx.data.cats.length ? `${ctx.data.cats.length} vybráno` : 'Vše'],
+            ['🔔', 'Upozornění', `${ctx.data.notify ?? 3}× denně`],
+            ['🔒', 'Soukromí', 'Kontakt jen po potvrzení'],
+          ].map(([e, l, v], i) => (
+            <View key={l} style={[st.settingRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#E8E8ED' }]}>
+              <Text style={{ fontSize: 18 }}>{e}</Text>
+              <Text style={[st.body, { flex: 1, marginLeft: 12 }]}>{l}</Text>
+              <Text style={st.chartAxis}>{v}</Text>
+            </View>
+          ))}
+        </View>
+        <Pressable onPress={onRestart} hitSlop={10}>
+          <Text style={[st.secondary, { marginTop: 24, color: '#FF3B30' }]}>Resetovat demo</Text>
+        </Pressable>
+      </ScrollView>
+      <Paywall
+        visible={pay}
+        discount={disc}
+        onClose={() => setPay(false)}
+        onUnlock={() => {
+          setPay(false);
+          ctx.set('unlocked', true);
+        }}
+      />
+    </View>
+  );
+}
+
+const TABS = [
+  ['home', '🏠', 'Domů'],
+  ['mine', '📦', 'Moje věci'],
+  ['add', '＋', ''],
+  ['activity', '🔔', 'Aktivita'],
+  ['profile', '👤', 'Profil'],
+];
+
+function MainApp({ ctx, onRestart }) {
+  const pending = ctx.requests.filter((r) => r.status === 'pending').length;
+  const tab = ctx.tab;
+  return (
+    <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
+      <View style={{ flex: 1 }}>
+        {tab === 'home' ? <HomeTab ctx={ctx} /> : null}
+        {tab === 'mine' ? <MyItemsTab ctx={ctx} /> : null}
+        {tab === 'activity' ? <ActivityTab ctx={ctx} /> : null}
+        {tab === 'profile' ? <ProfileTab ctx={ctx} onRestart={onRestart} /> : null}
+      </View>
+      <View style={st.tabBar}>
+        {TABS.map(([k, e, l]) =>
+          k === 'add' ? (
+            <Pressable
+              key={k}
+              onPress={() => {
+                tap();
+                ctx.openAdd();
+              }}
+              style={st.tabAdd}
+            >
+              <Text style={{ color: '#fff', fontSize: 30, fontWeight: '700', marginTop: -2 }}>＋</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              key={k}
+              onPress={() => {
+                tap();
+                ctx.setTab(k);
+              }}
+              style={st.tabBtn}
+            >
+              <Text style={{ fontSize: 22, opacity: tab === k ? 1 : 0.45 }}>{e}</Text>
+              <Text style={[st.tabTxt, tab === k && { color: B }]}>{l}</Text>
+              {k === 'activity' && pending ? (
+                <View style={[st.bellBadge, { top: 0, right: 14 }]}>
+                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{pending}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          )
+        )}
+      </View>
     </SafeAreaView>
   );
 }
 
-// ---------- App ----------
+function AddItemModal({ ctx }) {
+  return (
+    <Modal visible={ctx.addOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={ctx.closeAdd}>
+      <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: 16 }}>
+        <Pressable onPress={ctx.closeAdd} hitSlop={12} style={{ alignSelf: 'flex-end', paddingHorizontal: 24, paddingBottom: 6 }}>
+          <Text style={{ fontSize: 17, color: B, fontWeight: '700' }}>Zavřít</Text>
+        </Pressable>
+        {ctx.addOpen ? (
+          <FirstItem
+            ctx={ctx}
+            title="Co daruješ dnes?"
+            hideSkip
+            next={() => {
+              ctx.closeAdd();
+              ctx.setTab('mine');
+            }}
+          />
+        ) : null}
+        <View style={{ height: 24 }} />
+      </View>
+    </Modal>
+  );
+}
+
+// ---------- Root ----------
 const NEIGHBORS = [
   { from: 'Petr', e: '👨‍🦰', km: '0,8', msg: 'Ahoj, můžu si to vyzvednout dnes v 18:00?', delay: 5000 },
   { from: 'Jana', e: '👩', km: '1,4', msg: 'Dobrý den, mám zájem, bydlím kousek od vás 🙂', delay: 13000 },
@@ -1731,12 +2141,15 @@ const NEIGHBORS = [
 
 function Root() {
   const [route, setRoute] = useState('intro');
+  const [tab, setTab] = useState('home');
   const [data, setData] = useState({});
+  const [myItems, setMyItems] = useState([]);
   const [requests, setRequests] = useState([]);
   const [outReq, setOutReq] = useState({});
-  const [inbox, setInbox] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const timers = useRef([]);
+  const later = (fn, ms) => timers.current.push(setTimeout(fn, ms));
 
   const notify = async (title, body, payload) => {
     let shown = false;
@@ -1750,28 +2163,15 @@ function Root() {
     if (!shown) setToast({ title, body, data: payload });
   };
 
-  // Demo: po zveřejnění věci se ozvou sousedé
-  useEffect(() => {
-    if (!data.item) return;
-    const name = data.item.t;
-    const ids = NEIGHBORS.map((n) =>
-      setTimeout(() => {
-        setRequests((rs) => [...rs, { ...n, id: n.from + Date.now(), status: 'pending', at: Date.now() }]);
-        success();
-        notify(`${n.from} chce „${name}“ 👋`, n.msg, { type: 'request' });
-      }, n.delay)
-    );
-    timers.current.push(...ids);
-    return () => ids.forEach(clearTimeout);
-  }, [data.item]);
-
-  // Klepnutí na notifikaci
   useEffect(() => {
     let sub;
     try {
       sub = Notifications.addNotificationResponseReceivedListener((r) => {
         const t = r.notification.request.content.data && r.notification.request.content.data.type;
-        if (t === 'request') setInbox(true);
+        if (t === 'request') {
+          setRoute('main');
+          setTab('activity');
+        }
       });
     } catch (e) {}
     return () => sub && sub.remove();
@@ -1780,28 +2180,58 @@ function Root() {
   const ctx = {
     data,
     set: (k, v) => setData((d) => ({ ...d, [k]: v })),
+    myItems,
     requests,
     outReq,
-    inbox,
-    openInbox: () => setInbox(true),
-    closeInbox: () => setInbox(false),
-    accept: (id) => {
-      const r = requests.find((x) => x.id === id);
-      setRequests((rs) => rs.map((x) => (x.id === id ? { ...x, status: 'accepted' } : x.status === 'pending' ? { ...x, status: 'declined' } : x)));
-      setData((d) => ({ ...d, ownReserved: true }));
-      success();
-      if (r) setToast({ title: 'Potvrzeno 🎉', body: `${r.from} dostal upozornění a tvůj kontakt. Ostatním dáme vědět, že je zamluveno.` });
+    tab,
+    setTab,
+    addOpen,
+    openAdd: () => setAddOpen(true),
+    closeAdd: () => setAddOpen(false),
+    openInbox: () => {
+      setRoute('main');
+      setTab('activity');
     },
-    decline: (id) => setRequests((rs) => rs.map((x) => (x.id === id ? { ...x, status: 'declined' } : x))),
+    addItem: (it) => {
+      const id = 'my' + Date.now();
+      setMyItems((xs) => [...xs, { ...it, id, status: 'active', views: 0, at: Date.now() }]);
+      later(() => setMyItems((xs) => xs.map((x) => (x.id === id ? { ...x, views: x.views + 7 } : x))), 3000);
+      NEIGHBORS.forEach((n) =>
+        later(() => {
+          setRequests((rs) => [...rs, { ...n, id: n.from + Date.now(), itemId: id, itemT: it.t, status: 'pending', at: Date.now() }]);
+          success();
+          notify(`${n.from} chce „${it.t}“ 👋`, n.msg, { type: 'request' });
+        }, n.delay)
+      );
+    },
+    accept: (rid) => {
+      const r = requests.find((x) => x.id === rid);
+      if (!r) return;
+      setRequests((rs) =>
+        rs.map((x) => (x.id === rid ? { ...x, status: 'accepted' } : x.itemId === r.itemId && x.status === 'pending' ? { ...x, status: 'declined' } : x))
+      );
+      setMyItems((xs) => xs.map((x) => (x.id === r.itemId ? { ...x, status: 'reserved' } : x)));
+      success();
+      setToast({ title: 'Potvrzeno 🎉', body: `${r.from} dostal upozornění a tvůj kontakt. Po předání označ věc jako předanou.` });
+    },
+    decline: (rid) => setRequests((rs) => rs.map((x) => (x.id === rid ? { ...x, status: 'declined' } : x))),
+    markGiven: (id) => {
+      setMyItems((xs) => xs.map((x) => (x.id === id ? { ...x, status: 'given' } : x)));
+      success();
+      setToast({ title: 'Předáno ✅', body: 'Díky, že posíláš věci dál! 💜' });
+    },
+    deleteItem: (id) => {
+      setMyItems((xs) => xs.filter((x) => x.id !== id));
+      setRequests((rs) => rs.filter((r) => r.itemId !== id));
+    },
     requestItem: (item, msg) => {
       setOutReq((o) => ({ ...o, [item.t]: 'pending' }));
       success();
-      const t = setTimeout(() => {
+      later(() => {
         setOutReq((o) => ({ ...o, [item.t]: 'accepted' }));
         success();
         notify(`${item.t} je tvoje! 🎉`, 'Dárce potvrdil tvoji žádost – kontakt je odemčený. Domluvte si vyzvednutí.', { type: 'accepted' });
       }, 6000);
-      timers.current.push(t);
     },
   };
 
@@ -1809,9 +2239,11 @@ function Root() {
     timers.current.forEach(clearTimeout);
     timers.current = [];
     setData({});
+    setMyItems([]);
     setRequests([]);
     setOutReq({});
-    setInbox(false);
+    setAddOpen(false);
+    setTab('home');
     setRoute('intro');
   };
 
@@ -1820,21 +2252,41 @@ function Root() {
   else if (route === 'give')
     screen = <Flow key="give" steps={GIVE_STEPS} ctx={ctx} onExit={() => setRoute('intro')} onFinish={() => setRoute('given')} />;
   else if (route === 'given')
-    screen = <Given ctx={ctx} onBrowse={() => setRoute(data.unlocked ? 'feed' : 'take')} onRestart={restart} />;
+    screen = (
+      <Given
+        ctx={ctx}
+        onContinue={() => {
+          setTab(myItems.length ? 'mine' : 'home');
+          setRoute('main');
+        }}
+        onRestart={restart}
+      />
+    );
   else if (route === 'take')
-    screen = <Flow key="take" steps={TAKE_STEPS} ctx={ctx} onExit={() => setRoute('intro')} onFinish={() => setRoute('feed')} />;
-  else screen = <Feed ctx={ctx} onGive={() => setRoute('give')} onRestart={restart} />;
+    screen = (
+      <Flow
+        key="take"
+        steps={TAKE_STEPS}
+        ctx={ctx}
+        onExit={() => setRoute('intro')}
+        onFinish={() => {
+          setTab('home');
+          setRoute('main');
+        }}
+      />
+    );
+  else screen = <MainApp ctx={ctx} onRestart={restart} />;
 
   return (
     <View style={{ flex: 1 }}>
       <StatusBar barStyle="dark-content" />
       {screen}
-      <Inbox ctx={ctx} />
+      <AddItemModal ctx={ctx} />
       <Toast
         toast={toast}
         onHide={() => setToast(null)}
         onPress={() => {
-          if (toast && toast.data && toast.data.type === 'request') setInbox(true);
+          if (toast && toast.data && toast.data.type === 'request') ctx.openInbox();
           setToast(null);
         }}
       />
@@ -1948,6 +2400,34 @@ const st = StyleSheet.create({
     padding: 14,
   },
   photoThumb: { width: 110, height: 110, borderRadius: 16, marginRight: 10 },
+  perkLine: { position: 'absolute', left: 45, right: 45, top: 24, height: 4, borderRadius: 2, backgroundColor: '#E5E5EA' },
+  perkDot: { width: 52, height: 52, borderRadius: 26, borderWidth: 3, borderColor: '#E5E5EA', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  discountPill: { backgroundColor: B, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8 },
+  segment: { flexDirection: 'row', backgroundColor: CARD, borderRadius: 14, padding: 4, marginBottom: 16 },
+  segBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  segBtnOn: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  segTxt: { fontSize: 14, fontWeight: '700', color: SUB },
+  bigAvatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: B, alignItems: 'center', justifyContent: 'center' },
+  statBox: { flex: 1, alignItems: 'center', backgroundColor: CARD, borderRadius: 18, paddingVertical: 14, marginHorizontal: 4 },
+  settingRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
+  tabBar: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#EFEFF2', paddingTop: 8, paddingBottom: 4, backgroundColor: '#fff' },
+  tabBtn: { flex: 1, alignItems: 'center' },
+  tabTxt: { fontSize: 11, fontWeight: '700', color: SUB, marginTop: 2 },
+  tabAdd: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: B,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 6,
+    marginTop: -26,
+    shadowColor: B,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
   statusCard: { backgroundColor: B_LIGHT, borderRadius: 20, padding: 18, alignItems: 'center' },
   inboxHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#EFEFF2' },
   reqCard: { backgroundColor: CARD, borderRadius: 20, padding: 16, marginBottom: 12 },
