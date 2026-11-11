@@ -799,169 +799,16 @@ var Grid = function Grid({ items, onItem }) {
 }
 
 
-// ---------- Taki – průvodce (krokodýl) ----------
-// mood: happy | wow | wink | excited | think
-var Taki = function Taki({ size = 120, mood = 'happy', wave = false, jump = 0 }) {
-  const bob = useRef(new Animated.Value(0)).current;
-  const hop = useRef(new Animated.Value(0)).current;
-  const arm = useRef(new Animated.Value(0)).current;
-  const [blink, setBlink] = useState(false);
+// Kulatý odznak s ikonou (místo maskota)
+var IconBadge = function IconBadge({ name, size = 84 }) {
+  const pop = useRef(new Animated.Value(0.6)).current;
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(bob, { toValue: 1, duration: 1300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(bob, { toValue: 0, duration: 1300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])
-    ).start();
-    let t;
-    const loop = () => {
-      t = setTimeout(() => {
-        setBlink(true);
-        setTimeout(() => setBlink(false), 140);
-        loop();
-      }, 2200 + Math.random() * 2400);
-    };
-    loop();
-    return () => clearTimeout(t);
-  }, []);
-  useEffect(() => {
-    if (!wave) return arm.setValue(0);
-    const a = Animated.loop(
-      Animated.sequence([
-        Animated.timing(arm, { toValue: 1, duration: 260, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(arm, { toValue: -1, duration: 260, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ]),
-      { iterations: 4 }
-    );
-    a.start();
-    return () => a.stop();
-  }, [wave]);
-  useEffect(() => {
-    if (!jump) return;
-    impact('Soft');
-    hop.setValue(0);
-    Animated.sequence([
-      Animated.timing(hop, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      Animated.spring(hop, { toValue: 0, friction: 4, tension: 120, useNativeDriver: true }),
-    ]).start();
-  }, [jump]);
-  const k = size / 120;
-  // Taki: roztomilý krokodýl složený z obyčejných tvarů (bez SVG), mřížka 120 × 140
-  const box = (x, y, w, h, extra) => ({ position: 'absolute', left: x * k, top: y * k, width: w * k, height: h * k, ...extra });
-  const G = '#5BCB8F';
-  const GD = '#2E9B66';
-  const SNOUT = '#7EDCAA';
-  const CREAM = '#FFF1C2';
-  const M = '#1D5B3D';
-  const arc = (x, y, w, h, color, thick) => (
-    <View style={box(x, y, w, h, { borderBottomWidth: thick * k, borderLeftWidth: thick * 0.6 * k, borderRightWidth: thick * 0.6 * k, borderColor: color, borderBottomLeftRadius: w * k, borderBottomRightRadius: w * k, borderTopWidth: 0 })} />
-  );
-  const tooth = (x, y, key) => (
-    <View key={key} style={{ position: 'absolute', left: x * k, top: y * k, width: 0, height: 0, borderLeftWidth: 3 * k, borderRightWidth: 3 * k, borderTopWidth: 5 * k, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#FFFFFF' }} />
-  );
-  const ly = mood === 'think' ? -3 : 0;
-  const eye = (cx, closed) =>
-    closed ? (
-      arc(cx - 7, 15, 14, 7, M, 3)
-    ) : (
-      <>
-        <View style={box(cx - 4.5, (mood === 'wow' ? 13 : 14) + ly, 9, mood === 'wow' ? 13 : 11, { backgroundColor: '#14301F', borderRadius: 5 * k })} />
-        <View style={box(cx - 2, 15.5 + ly, 3.5, 3.5, { backgroundColor: '#FFFFFF', borderRadius: 2 * k })} />
-      </>
-    );
-  let mouth = (
-    <>
-      {arc(30, 58, 60, 13, M, 3)}
-      {[[38, 64], [48, 68], [66, 68], [76, 64]].map(([x, y], i) => tooth(x, y, 't' + i))}
-    </>
-  );
-  if (mood === 'wow') mouth = <View style={box(54, 62, 12, 12, { backgroundColor: M, borderRadius: 6 * k })} />;
-  if (mood === 'excited')
-    mouth = (
-      <>
-        <View style={box(38, 61, 44, 15, { backgroundColor: M, borderBottomLeftRadius: 14 * k, borderBottomRightRadius: 14 * k, overflow: 'hidden' })}>
-          <View style={{ position: 'absolute', left: 12 * k, top: 8 * k, width: 20 * k, height: 10 * k, borderRadius: 6 * k, backgroundColor: '#FF8FB1' }} />
-        </View>
-        {tooth(45, 61, 'e1')}
-        {tooth(69, 61, 'e2')}
-      </>
-    );
-  if (mood === 'think') mouth = <View style={box(48, 66, 24, 3, { backgroundColor: M, borderRadius: 2 * k, transform: [{ rotate: '-6deg' }] })} />;
+    Animated.spring(pop, { toValue: 1, friction: 5, tension: 90, useNativeDriver: true }).start();
+  }, [name]);
   return (
-    <Animated.View
-      style={{
-        width: size,
-        height: size * (140 / 120),
-        transform: [
-          { translateY: Animated.add(bob.interpolate({ inputRange: [0, 1], outputRange: [0, -5 * k] }), hop.interpolate({ inputRange: [0, 1], outputRange: [0, -22 * k] })) },
-          { scale: hop.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) },
-        ],
-      }}
-    >
-      {/* stín */}
-      <View style={box(26, 129, 68, 9, { backgroundColor: 'rgba(17,17,17,0.10)', borderRadius: 34 * k })} />
-      {/* ocásek s hřebínkem */}
-      {[[89, 96], [96, 92.6], [103, 89]].map(([x, y], i) => (
-        <View key={'s' + i} style={box(x, y, 7, 7, { backgroundColor: GD, borderRadius: 2 * k, transform: [{ rotate: '17deg' }] })} />
-      ))}
-      <View style={box(78, 98, 40, 16, { backgroundColor: GD, borderRadius: 8 * k, transform: [{ rotate: '-28deg' }] })} />
-      {/* nožky */}
-      <View style={box(34, 116, 22, 14, { backgroundColor: GD, borderRadius: 7 * k })} />
-      <View style={box(64, 116, 22, 14, { backgroundColor: GD, borderRadius: 7 * k })} />
-      {/* levá ručka */}
-      <View style={box(17, 82, 14, 26, { backgroundColor: G, borderRadius: 7 * k, transform: [{ rotate: '22deg' }] })} />
-      {/* tělo a bříško */}
-      <View style={box(28, 70, 64, 54, { borderRadius: 26 * k, overflow: 'hidden' })}>
-        <LinearGradient colors={['#6FD9A0', '#3FB37A']} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={{ flex: 1 }} />
-      </View>
-      <View style={box(40, 80, 40, 40, { backgroundColor: CREAM, borderRadius: 20 * k })} />
-      <View style={box(46, 92, 28, 2.5, { backgroundColor: 'rgba(180,140,40,0.25)', borderRadius: 2 * k })} />
-      <View style={box(46, 103, 28, 2.5, { backgroundColor: 'rgba(180,140,40,0.25)', borderRadius: 2 * k })} />
-      {/* oči na hlavě */}
-      <View style={box(24, 4, 32, 30, { backgroundColor: '#6AD69C', borderRadius: 16 * k })} />
-      <View style={box(64, 4, 32, 30, { backgroundColor: '#6AD69C', borderRadius: 16 * k })} />
-      {/* hlava */}
-      <View style={box(14, 18, 92, 64, { borderRadius: 32 * k, overflow: 'hidden' })}>
-        <LinearGradient colors={['#74DCA4', '#4CBF84']} start={{ x: 0.3, y: 0 }} end={{ x: 0.6, y: 1 }} style={{ flex: 1 }} />
-      </View>
-      {[[52, 22], [62, 22], [57, 28]].map(([x, y], i) => (
-        <View key={'p' + i} style={box(x, y, 6, 4, { backgroundColor: 'rgba(30,110,70,0.25)', borderRadius: 3 * k })} />
-      ))}
-      <View style={box(30, 9, 20, 20, { backgroundColor: '#FFFFFF', borderRadius: 10 * k })} />
-      <View style={box(70, 9, 20, 20, { backgroundColor: '#FFFFFF', borderRadius: 10 * k })} />
-      {eye(40, blink)}
-      {eye(80, blink || mood === 'wink')}
-      {/* čumák */}
-      <View style={box(18, 44, 84, 38, { backgroundColor: SNOUT, borderRadius: 19 * k })} />
-      <View style={box(46, 50, 6, 4, { backgroundColor: M, borderRadius: 3 * k, opacity: 0.7 })} />
-      <View style={box(68, 50, 6, 4, { backgroundColor: M, borderRadius: 3 * k, opacity: 0.7 })} />
-      <View style={box(16, 56, 13, 8, { backgroundColor: 'rgba(255,143,177,0.75)', borderRadius: 6 * k })} />
-      <View style={box(91, 56, 13, 8, { backgroundColor: 'rgba(255,143,177,0.75)', borderRadius: 6 * k })} />
-      {mouth}
-      {/* pravá ručka (mává) */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          left: 89 * k,
-          top: 80 * k,
-          width: 14 * k,
-          height: 26 * k,
-          transformOrigin: 'top',
-          transform: [{ rotate: wave ? arm.interpolate({ inputRange: [-1, 1], outputRange: ['-150deg', '-115deg'] }) : '-22deg' }],
-        }}
-      >
-        <View style={{ flex: 1, borderRadius: 7 * k, backgroundColor: G }} />
-      </Animated.View>
+    <Animated.View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: B_LIGHT, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pop }] }}>
+      <Ionicons name={name} size={size * 0.44} color={B} />
     </Animated.View>
-  );
-}
-
-var SpeechBubble = function SpeechBubble({ text, style, small }) {
-  return (
-    <View style={[st.bubble, style]}>
-      <View style={st.bubbleTail} />
-      <Text style={[st.bubbleTxt, small && { fontSize: 14 }]}>{text}</Text>
-    </View>
   );
 }
 
@@ -1022,14 +869,6 @@ var Flow = function Flow({ steps, onExit, onFinish, ctx }) {
           <PointsPill points={ctx.points} />
         </View>
       )}
-      {!Step.hideHeader && Step.tip ? (
-        <View style={st.guideRow}>
-          <Taki size={58} mood={Step.mood || 'happy'} jump={i + 1} />
-          <FadeIn key={'tip' + i} style={{ flex: 1, marginLeft: 6 }}>
-            <SpeechBubble text={Step.tip} small />
-          </FadeIn>
-        </View>
-      ) : null}
       <View key={i} style={{ flex: 1 }}>
         <Step next={next} ctx={ctx} />
       </View>
@@ -1119,10 +958,6 @@ var Welcome = function Welcome({ onStart }) {
         <Twinkle e="🎁" style={{ right: 24, top: 6 }} delay={1200} />
       </View>
       <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'flex-end' }}>
-        <FadeIn delay={400} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-          <Taki size={92} wave mood="excited" />
-          <SpeechBubble text="Ahoj, já jsem Taki! 👋 Provedu tě appkou." style={{ flex: 1, marginLeft: 6 }} />
-        </FadeIn>
         <FadeIn delay={600} style={{ alignItems: 'center' }}>
           <Logo size={48} />
           <Text style={{ color: B, fontWeight: '800', fontSize: 17, marginTop: 6 }}>Pošli radost dál.</Text>
@@ -1154,10 +989,9 @@ var Intro = function Intro({ onPick }) {
       <Blobs />
       <View style={{ flex: 1, paddingHorizontal: 24 }}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <FadeIn style={{ marginBottom: 6 }}>
-            <SpeechBubble text={sel === 'give' ? 'Super, budeš dárce! 💜' : sel === 'take' ? 'Jdeme hledat poklady! 🔎' : 'Na co se chystáš?'} />
+          <FadeIn>
+            <AppIcon size={112} />
           </FadeIn>
-          <Taki size={150} wave={!sel} mood={sel ? 'excited' : 'happy'} jump={sel ? (sel === 'give' ? 1 : 2) : 0} />
           <FadeIn delay={150} style={{ alignItems: 'center', marginTop: 24 }}>
             <Text style={[st.h1, { textAlign: 'center' }]}>Co tě přivádí do Giva?</Text>
             <Text style={[st.sub, { textAlign: 'center' }]}>Vyber jednu možnost – appku ti nastavíme na míru.</Text>
@@ -1734,7 +1568,7 @@ var Setup = function Setup({ next, title, items, emoji }) {
   return (
     <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
       <View style={{ alignItems: 'center' }}>
-        <Taki size={130} mood={p >= 100 ? 'excited' : 'think'} jump={p >= 100 ? 1 : 0} />
+        <IconBadge name={p >= 100 ? 'checkmark' : 'sparkles'} size={110} />
       </View>
       <Text style={[st.bigNum, { fontSize: 76, color: INK, textAlign: 'center', marginTop: 12 }]}>{p}%</Text>
       <Text style={[st.h1, { textAlign: 'center', fontSize: 28 }]}>{title}</Text>
@@ -2477,7 +2311,7 @@ var CommunityStep = function CommunityStep({ next }) {
           </View>
         ) : failed ? (
           <View style={{ alignItems: 'center' }}>
-            <Taki size={150} mood="excited" wave />
+            <IconBadge name="people" size={130} />
           </View>
         ) : (
           <ActivityIndicator color={B} />
@@ -2543,7 +2377,7 @@ var TakeDone = function TakeDone({ next }) {
   return (
     <StepLayout title="Hotovo, můžeš začít" subtitle="Ukážeme ti věci zdarma kolem tebe. Když něco najdeš, klepni na „Mám zájem“." cta="Ukázat věci kolem mě" onNext={next} center>
       <View style={{ alignItems: 'center' }}>
-        <Taki size={170} mood="excited" wave />
+        <IconBadge name="sparkles" size={150} />
       </View>
     </StepLayout>
   );
@@ -3010,7 +2844,7 @@ var Given = function Given({ ctx, onContinue }) {
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
       <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
         <FadeIn style={{ alignItems: 'center' }}>
-          <Taki size={120} mood="excited" jump={1} />
+          <IconBadge name="checkmark" size={110} />
           <Text style={[st.h1, { textAlign: 'center', marginTop: 8 }]}>{item ? 'Tvoje věc je venku!' : 'Vše nastaveno!'}</Text>
           <Text style={[st.sub, { textAlign: 'center' }]}>
             {item ? 'Dáme ti vědět, jakmile si o ni někdo řekne.' : 'Věc můžeš přidat kdykoli tlačítkem + dole.'}
@@ -3194,7 +3028,7 @@ var HomeTab = function HomeTab({ ctx }) {
             </>
           ) : filtered.length === 0 ? (
             <View style={{ alignItems: 'center', marginTop: 40 }}>
-              <Taki size={100} mood={items.length ? 'think' : 'happy'} />
+              <IconBadge name={items.length ? 'search' : 'leaf'} size={84} />
               <Text style={[st.h2, { marginTop: 10, textAlign: 'center' }]}>{items.length ? 'Nic jsme nenašli' : 'Buď první v okolí'}</Text>
               <Text style={[st.chartAxis, { textAlign: 'center' }]}>
                 {items.length ? 'Zkus jiné slovo nebo uvolni filtry.' : 'Givo tu teprve začíná. Tvoje první věc uvidí všichni sousedé kolem.'}
@@ -3286,7 +3120,7 @@ var MyItemsTab = function MyItemsTab({ ctx }) {
         </View>
         {list.length === 0 ? (
           <View style={{ alignItems: 'center', marginTop: 40 }}>
-            <Taki size={100} mood="happy" />
+            <IconBadge name="cube-outline" size={84} />
             <Text style={[st.h2, { marginTop: 10 }]}>{seg === 'active' ? 'Nic tu zatím není' : seg === 'reserved' ? 'Žádné rezervace' : 'Zatím nic předaného'}</Text>
             {seg === 'active' ? <Button title="Darovat věc" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={ctx.openAdd} /> : null}
           </View>
@@ -3353,7 +3187,7 @@ var ActivityTab = function ActivityTab({ ctx }) {
       >
         {ctx.incoming.length === 0 && ctx.outgoingList.length === 0 ? (
           <View style={{ alignItems: 'center', marginTop: 40 }}>
-            <Taki size={100} mood="think" />
+            <IconBadge name="notifications-outline" size={84} />
             <Text style={[st.h2, { marginTop: 10 }]}>Zatím tu je klid</Text>
             <Text style={[st.chartAxis, { textAlign: 'center', paddingHorizontal: 12 }]}>Tady uvidíš, kdo chce tvoje věci, a jak dopadly tvoje žádosti.</Text>
             <Button title="Projít věci v okolí" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={() => ctx.setTab('home')} />
@@ -3503,7 +3337,7 @@ var ProfileTab = function ProfileTab({ ctx, onRestart }) {
         </View>
         {given + handed + got === 0 ? (
           <View style={[st.chartCard, { marginTop: 20, flexDirection: 'row', alignItems: 'center' }]}>
-            <Taki size={64} mood="wink" />
+            <IconBadge name="gift" size={56} />
             <View style={{ flex: 1, marginLeft: 14 }}>
               <Text style={st.h2}>Tvůj první dar tě čeká</Text>
               <Text style={st.chartAxis}>Daruj věc a získej odznak První dar.</Text>
@@ -3648,31 +3482,6 @@ var SettingsLinks = function SettingsLinks({ onReplay }) {
 }
 
 // ---------- Root ----------
-GiveReason.tip = 'Já jsem Taki a provedu tě. Bude to rychlé!';
-GiveImpact.tip = 'Tohle se mi líbí! 💜';
-GiveImpact.mood = 'excited';
-GiveWhat.tip = 'Klidně vyber víc věcí najednou.';
-GiveAmount.tip = 'Ať víme, jak velký úklid chystáš 🧹';
-GiveAmount.mood = 'wink';
-GivePickup.tip = 'Sousedé se ti přizpůsobí.';
-GiveSpeed.tip = 'Vyfotit to zvládneš levou zadní.';
-GiveSpeed.mood = 'wink';
-NotifyGive.tip = 'Ozvu se, jen když se něco děje.';
-GiftStep.tip = 'Pssst… mám pro tebe dárek!';
-GiftStep.mood = 'wow';
-FirstItem.tip = 'Hezká fotka = rychlejší zájemce 📸';
-TakeWhy.tip = 'Upřímnost pomáhá – dárci rádi ví, komu věc dělá radost 💜';
-TakeWhy.mood = 'happy';
-CommunityStep.tip = 'Tohle jsou skutečná čísla, žádné výmysly 😉';
-CommunityStep.mood = 'excited';
-TakeCategories.tip = 'Ahoj, já jsem Taki! Pomůžu ti najít poklady.';
-TakeSavings.tip = 'Zdarma je nejlepší cena 😄';
-TakeSavings.mood = 'excited';
-TakeCompare.tip = 'Žádné smlouvání, slibuju.';
-TakeCompare.mood = 'wink';
-TakeDistance.tip = 'Kam až dojdeš pěšky?';
-TakeDistance.mood = 'think';
-NotifyTake.tip = 'Dám vědět, když se objeví něco pro tebe.';
 var GIVE_STEPS = [GiveReason, GiveImpact, GiveWhat, GiveAmount, GivePickup, NeighborsMap, GiveSpeed, CommunityStep, NotifyGive, SetupGive, GiftStep, FirstItem];
 var TAKE_STEPS = [TakeCategories, TakeWhy, TakeSavings, TakeCompare, TakeDistance, CommunityStep, NotifyTake, SetupTake, GiftStep, TakeDone];
 
