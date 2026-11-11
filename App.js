@@ -578,31 +578,33 @@ function Taki({ size = 120, mood = 'happy', wave = false, jump = 0 }) {
     ]).start();
   }, [jump]);
   const k = size / 120;
-  // Taki je složený z obyčejných tvarů (bez SVG), souřadnice v mřížce 120 × 140
+  // Taki: buclatý „gumídek“ složený z obyčejných tvarů (bez SVG), mřížka 120 × 140
   const box = (x, y, w, h, extra) => ({ position: 'absolute', left: x * k, top: y * k, width: w * k, height: h * k, ...extra });
-  const DARK = '#5A1FBF';
+  const DARK = '#6A35DA';
+  const INKY = '#1E1240';
+  const MINT = '#7DE3B8';
   const arc = (x, y, w, h, color, thick) => (
     <View style={box(x, y, w, h, { borderBottomWidth: thick * k, borderLeftWidth: thick * 0.6 * k, borderRightWidth: thick * 0.6 * k, borderColor: color, borderBottomLeftRadius: w * k, borderBottomRightRadius: w * k, borderTopWidth: 0 })} />
   );
+  const lookY = mood === 'think' ? -3 : 0;
   const eye = (cx, closed) =>
     closed ? (
-      arc(cx - 8, 68, 16, 8, '#FFFFFF', 4)
+      arc(cx - 7, 66, 14, 7, INKY, 3.5)
     ) : (
       <>
-        <View style={box(cx - 9, 61, 18, mood === 'wow' ? 24 : 22, { backgroundColor: '#FFFFFF', borderRadius: 11 * k })} />
-        <View style={box(cx - 3, mood === 'think' ? 64 : 69, 10, 10, { backgroundColor: '#16102A', borderRadius: 5 * k })} />
-        <View style={box(cx + 2, mood === 'think' ? 65 : 70, 4, 4, { backgroundColor: '#FFFFFF', borderRadius: 2 * k })} />
+        <View style={box(cx - 5.5, 60 + lookY, 11, mood === 'wow' ? 16 : 14, { backgroundColor: INKY, borderRadius: 6 * k })} />
+        <View style={box(cx - 2, 62 + lookY, 4, 4, { backgroundColor: '#FFFFFF', borderRadius: 2 * k })} />
       </>
     );
-  let mouth = arc(50, 88, 20, 10, '#FFFFFF', 4);
-  if (mood === 'wow') mouth = <View style={box(53, 89, 14, 16, { backgroundColor: '#2A0B66', borderRadius: 8 * k })} />;
+  let mouth = arc(53, 79, 14, 7, INKY, 3);
+  if (mood === 'wow') mouth = <View style={box(55, 80, 10, 11, { backgroundColor: INKY, borderRadius: 6 * k })} />;
   if (mood === 'excited')
     mouth = (
-      <View style={box(47, 89, 26, 14, { backgroundColor: '#2A0B66', borderBottomLeftRadius: 14 * k, borderBottomRightRadius: 14 * k, overflow: 'hidden' })}>
-        <View style={{ position: 'absolute', left: 6 * k, top: 8 * k, width: 14 * k, height: 8 * k, borderRadius: 6 * k, backgroundColor: '#FF8FB1' }} />
+      <View style={box(51, 79, 18, 11, { backgroundColor: INKY, borderBottomLeftRadius: 10 * k, borderBottomRightRadius: 10 * k, overflow: 'hidden' })}>
+        <View style={{ position: 'absolute', left: 4 * k, top: 6 * k, width: 10 * k, height: 7 * k, borderRadius: 5 * k, backgroundColor: '#FF8FB1' }} />
       </View>
     );
-  if (mood === 'think') mouth = <View style={box(52, 95, 16, 4, { backgroundColor: '#FFFFFF', borderRadius: 2 * k, transform: [{ rotate: '-8deg' }] })} />;
+  if (mood === 'think') mouth = <View style={box(54, 83, 12, 3, { backgroundColor: INKY, borderRadius: 2 * k, transform: [{ rotate: '-8deg' }] })} />;
   return (
     <Animated.View
       style={{
@@ -614,30 +616,42 @@ function Taki({ size = 120, mood = 'happy', wave = false, jump = 0 }) {
         ],
       }}
     >
-      <View style={box(30, 128, 60, 10, { backgroundColor: 'rgba(17,17,17,0.12)', borderRadius: 30 * k })} />
-      <View style={box(38, 10, 44, 40, { borderWidth: 9 * k, borderBottomWidth: 0, borderColor: DARK, borderTopLeftRadius: 22 * k, borderTopRightRadius: 22 * k })} />
-      <View style={box(36, 114, 18, 14, { backgroundColor: DARK, borderRadius: 7 * k })} />
-      <View style={box(66, 114, 18, 14, { backgroundColor: DARK, borderRadius: 7 * k })} />
-      <View style={box(6, 76, 16, 26, { backgroundColor: DARK, borderRadius: 8 * k })} />
-      <View style={box(16, 34, 88, 86, { backgroundColor: B, borderRadius: 28 * k })} />
-      <View style={box(26, 41, 38, 12, { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 6 * k })} />
-      {eye(46, blink)}
-      {eye(74, blink || mood === 'wink')}
-      <View style={box(26, 86, 14, 9, { backgroundColor: 'rgba(255,143,177,0.75)', borderRadius: 7 * k })} />
-      <View style={box(80, 86, 14, 9, { backgroundColor: 'rgba(255,143,177,0.75)', borderRadius: 7 * k })} />
+      {/* stín */}
+      <View style={box(24, 129, 72, 9, { backgroundColor: 'rgba(17,17,17,0.10)', borderRadius: 36 * k })} />
+      {/* tykadlo s mentolovou kuličkou */}
+      <View style={box(58, 12, 4, 22, { backgroundColor: DARK, borderRadius: 2 * k, transform: [{ rotate: '8deg' }] })} />
+      <View style={box(55, 3, 15, 15, { backgroundColor: MINT, borderRadius: 8 * k })} />
+      <View style={box(58, 6, 5, 4, { backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 3 * k })} />
+      {/* nožky */}
+      <View style={box(33, 114, 22, 16, { backgroundColor: DARK, borderRadius: 9 * k })} />
+      <View style={box(65, 114, 22, 16, { backgroundColor: DARK, borderRadius: 9 * k })} />
+      {/* levá ručka */}
+      <View style={box(7, 70, 17, 34, { backgroundColor: '#8F5CF2', borderRadius: 9 * k, transform: [{ rotate: '16deg' }] })} />
+      {/* tělo – gumídek */}
+      <View style={box(14, 26, 92, 96, { borderTopLeftRadius: 46 * k, borderTopRightRadius: 46 * k, borderBottomLeftRadius: 34 * k, borderBottomRightRadius: 34 * k, overflow: 'hidden' })}>
+        <LinearGradient colors={['#CDB8FF', '#A57BFA', '#8A52F0']} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={{ flex: 1 }} />
+        <View style={{ position: 'absolute', left: 14 * k, top: 12 * k, width: 26 * k, height: 16 * k, borderRadius: 13 * k, backgroundColor: 'rgba(255,255,255,0.45)', transform: [{ rotate: '-25deg' }] }} />
+        {/* bříško */}
+        <View style={{ position: 'absolute', left: 30 * k, top: 66 * k, width: 32 * k, height: 20 * k, borderRadius: 16 * k, backgroundColor: 'rgba(255,255,255,0.12)' }} />
+      </View>
+      {eye(48, blink)}
+      {eye(72, blink || mood === 'wink')}
+      <View style={box(30, 74, 13, 8, { backgroundColor: 'rgba(255,143,177,0.8)', borderRadius: 6 * k })} />
+      <View style={box(77, 74, 13, 8, { backgroundColor: 'rgba(255,143,177,0.8)', borderRadius: 6 * k })} />
       {mouth}
+      {/* pravá ručka (mává) */}
       <Animated.View
         style={{
           position: 'absolute',
-          left: 98 * k,
-          top: 74 * k,
-          width: 16 * k,
-          height: 28 * k,
+          left: 97 * k,
+          top: 70 * k,
+          width: 17 * k,
+          height: 34 * k,
           transformOrigin: 'top',
-          transform: [{ rotate: wave ? arm.interpolate({ inputRange: [-1, 1], outputRange: ['-150deg', '-115deg'] }) : '-10deg' }],
+          transform: [{ rotate: wave ? arm.interpolate({ inputRange: [-1, 1], outputRange: ['-150deg', '-115deg'] }) : '-16deg' }],
         }}
       >
-        <View style={{ flex: 1, borderRadius: 8 * k, backgroundColor: DARK }} />
+        <View style={{ flex: 1, borderRadius: 9 * k, backgroundColor: '#8F5CF2' }} />
       </Animated.View>
     </Animated.View>
   );
