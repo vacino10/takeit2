@@ -28,6 +28,8 @@ import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as StoreReview from 'expo-store-review';
@@ -531,6 +533,44 @@ function Grid({ items, onItem }) {
   );
 }
 
+
+// ---------- Glass (skleněné povrchy) ----------
+const APP_BG = '#F4F1FB';
+function Glass({ style, children, radius = 24, intensity = 55, tint = 'light', shadow = true, strong = false }) {
+  return (
+    <View style={[shadow && st.glassShadow, { borderRadius: radius }, style]}>
+      <View style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
+        <BlurView intensity={intensity} tint={tint} style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: strong ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.5)' }]} />
+        <LinearGradient colors={['rgba(255,255,255,0.6)', 'rgba(255,255,255,0)']} style={{ position: 'absolute', left: 0, right: 0, top: 0, height: '55%' }} />
+        <View style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)' }]} />
+      </View>
+      {children}
+    </View>
+  );
+}
+
+// Jemné barevné pozadí, přes které je sklo vidět
+function GlassBg() {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(a, { toValue: 1, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(a, { toValue: 0, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  const drift = (x, y) => ({ transform: [{ translateX: a.interpolate({ inputRange: [0, 1], outputRange: [0, x] }) }, { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, y] }) }] });
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: APP_BG }]}>
+      <Animated.View style={[{ position: 'absolute', top: -120, right: -100, width: 340, height: 340, borderRadius: 170, backgroundColor: 'rgba(112,40,232,0.16)' }, drift(-40, 30)]} />
+      <Animated.View style={[{ position: 'absolute', top: 260, left: -140, width: 320, height: 320, borderRadius: 160, backgroundColor: 'rgba(125,227,184,0.22)' }, drift(50, -20)]} />
+      <Animated.View style={[{ position: 'absolute', bottom: -100, right: -60, width: 300, height: 300, borderRadius: 150, backgroundColor: 'rgba(255,143,177,0.16)' }, drift(-30, -40)]} />
+      <BlurView intensity={90} tint="light" style={StyleSheet.absoluteFill} />
+    </View>
+  );
+}
 
 // ---------- Taki – průvodce ----------
 // mood: happy | wow | wink | excited | think
@@ -1528,6 +1568,7 @@ function Toast({ toast, onPress, onHide }) {
         { top: insets.top + 6, opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [-120, 0] }) }] },
       ]}
     >
+      <Glass radius={22} intensity={70} strong shadow={false} style={StyleSheet.absoluteFill} />
       <Pressable onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center' }}>
         <AppIcon size={40} />
         <View style={{ flex: 1, marginLeft: 12 }}>
@@ -1948,36 +1989,39 @@ function FiltersSheet({ visible, value, onClose, onApply, count }) {
 
 
 const TABS = [
-  ['home', '🏠', 'Domů'],
-  ['mine', '📦', 'Moje věci'],
-  ['add', '＋', ''],
-  ['activity', '🔔', 'Aktivita'],
-  ['profile', '👤', 'Profil'],
+  ['home', 'home', 'Domů'],
+  ['mine', 'cube', 'Moje věci'],
+  ['add', 'add', ''],
+  ['activity', 'notifications', 'Aktivita'],
+  ['profile', 'person', 'Profil'],
 ];
 
 function MainApp({ ctx }) {
   const pending = ctx.incoming.filter((r) => r.status === 'pending').length;
   const tab = ctx.tab;
+  const insets = useSafeAreaInsets();
   return (
-    <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
-      <View style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
+      <GlassBg />
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {tab === 'home' ? <HomeTab ctx={ctx} /> : null}
         {tab === 'mine' ? <MyItemsTab ctx={ctx} /> : null}
         {tab === 'activity' ? <ActivityTab ctx={ctx} /> : null}
         {tab === 'profile' ? <ProfileTab ctx={ctx} /> : null}
-      </View>
-      <View style={st.tabBar}>
-        {TABS.map(([k, e, l]) =>
+      </SafeAreaView>
+      <Glass radius={32} intensity={70} strong style={[st.tabBar, { bottom: Math.max(insets.bottom, 12) }]}>
+        {TABS.map(([k, icon, l]) =>
           k === 'add' ? (
             <Pressable
               key={k}
               onPress={() => {
-                tap();
+                impact('Medium');
                 ctx.openAdd();
               }}
-              style={st.tabAdd}
+              style={({ pressed }) => [st.tabAdd, pressed && { transform: [{ scale: 0.92 }] }]}
+              accessibilityLabel="Přidat věc"
             >
-              <Text style={{ color: '#fff', fontSize: 30, fontWeight: '700', marginTop: -2 }}>＋</Text>
+              <Ionicons name="add" size={30} color="#fff" />
             </Pressable>
           ) : (
             <Pressable
@@ -1988,18 +2032,20 @@ function MainApp({ ctx }) {
               }}
               style={st.tabBtn}
             >
-              <Text style={{ fontSize: 22, opacity: tab === k ? 1 : 0.45 }}>{e}</Text>
+              <View style={[st.tabIcon, tab === k && st.tabIconOn]}>
+                <Ionicons name={tab === k ? icon : icon + '-outline'} size={22} color={tab === k ? B : '#6E6A80'} />
+              </View>
               <Text style={[st.tabTxt, tab === k && { color: B }]}>{l}</Text>
               {k === 'activity' && pending ? (
-                <View style={[st.bellBadge, { top: 0, right: 14 }]}>
+                <View style={[st.bellBadge, { top: -2, right: 10 }]}>
                   <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{pending}</Text>
                 </View>
               ) : null}
             </Pressable>
           )
         )}
-      </View>
-    </SafeAreaView>
+      </Glass>
+    </View>
   );
 }
 
@@ -2473,7 +2519,8 @@ function ItemDetail({ item, onClose, ctx }) {
   return (
     <Modal visible={!!item} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#fff' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
+        <View style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: footer ? 130 : 30 }} keyboardShouldPersistTaps="handled">
           <View>
             <Gallery item={item} height={340} />
             <View style={st.detailTopBar}>
@@ -2589,7 +2636,12 @@ function ItemDetail({ item, onClose, ctx }) {
             ) : null}
           </View>
         </ScrollView>
-        {footer ? <View style={st.stickyFooter}>{footer}</View> : null}
+        {footer ? (
+          <Glass radius={0} intensity={60} strong shadow={false} style={st.glassFooter}>
+            {footer}
+          </Glass>
+        ) : null}
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -2662,7 +2714,7 @@ function HomeTab({ ctx }) {
       <View style={{ paddingHorizontal: 24 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={st.searchBox}>
-            <Text style={{ fontSize: 16 }}>🔍</Text>
+            <Ionicons name="search" size={18} color="#8A8698" />
             <TextInput
               value={q}
               onChangeText={setQ}
@@ -2675,7 +2727,7 @@ function HomeTab({ ctx }) {
             />
             {q ? (
               <Pressable onPress={() => setQ('')} hitSlop={10} accessibilityLabel="Smazat hledání">
-                <Text style={{ color: SUB, fontSize: 16 }}>✕</Text>
+                <Ionicons name="close-circle" size={18} color="#A9A5B8" />
               </Pressable>
             ) : null}
           </View>
@@ -2687,7 +2739,7 @@ function HomeTab({ ctx }) {
             style={[st.filterBtn, activeFilters ? { backgroundColor: B } : null]}
             accessibilityLabel="Filtry"
           >
-            <Text style={{ fontSize: 18, color: activeFilters ? '#fff' : INK }}>⚙︎</Text>
+            <Ionicons name="options-outline" size={21} color={activeFilters ? '#fff' : INK} />
             {activeFilters ? (
               <View style={[st.bellBadge, { top: -5, right: -5 }]}>
                 <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{activeFilters}</Text>
@@ -2749,7 +2801,7 @@ function HomeTab({ ctx }) {
         />
       ) : (
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 130 }}
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={ctx.refreshing} onRefresh={ctx.refresh} tintColor={B} />}
         >
@@ -2818,7 +2870,7 @@ function MyItemsTab({ ctx }) {
     <View style={{ flex: 1 }}>
       <Header title="Moje věci" />
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 130 }}
         refreshControl={<RefreshControl refreshing={ctx.refreshing} onRefresh={ctx.refresh} tintColor={B} />}
       >
         <View style={st.segment}>
@@ -2905,7 +2957,7 @@ function ActivityTab({ ctx }) {
     <View style={{ flex: 1 }}>
       <Header title="Aktivita" />
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 130 }}
         refreshControl={<RefreshControl refreshing={ctx.refreshing} onRefresh={ctx.refresh} tintColor={B} />}
       >
         <Text style={st.section}>Žádosti o tvoje věci</Text>
@@ -2978,7 +3030,7 @@ function ProfileTab({ ctx, onRestart }) {
   return (
     <View style={{ flex: 1 }}>
       <Header title="Profil" />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 130 }}>
         <View style={{ alignItems: 'center' }}>
           <View style={st.bigAvatar}>
             <Text style={{ color: '#fff', fontSize: 40, fontWeight: '900' }}>{(name.trim()[0] || '🙂').toUpperCase()}</Text>
@@ -3465,22 +3517,26 @@ const st = StyleSheet.create({
   chipSm: { paddingVertical: 9, paddingHorizontal: 11, borderRadius: 18, backgroundColor: CARD, marginRight: 6 },
   chipSmTxt: { fontSize: 13, fontWeight: '700', color: INK },
   contactCircle: { width: 58, height: 58, borderRadius: 29, borderWidth: 2, borderColor: '#ECECF0', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 16, paddingHorizontal: 14, minHeight: 46 },
-  filterBtn: { width: 46, height: 46, borderRadius: 16, backgroundColor: CARD, alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
-  quickChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: CARD, marginRight: 8 },
-  quickChipOn: { backgroundColor: B },
+  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.75)', borderRadius: 18, paddingHorizontal: 14, minHeight: 48, borderWidth: 1, borderColor: 'rgba(255,255,255,0.95)', shadowColor: '#3A1A8A', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+  filterBtn: { width: 48, height: 48, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.75)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.95)', alignItems: 'center', justifyContent: 'center', marginLeft: 10, shadowColor: '#3A1A8A', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+  quickChip: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.95)', marginRight: 8 },
+  quickChipOn: { backgroundColor: B, borderColor: B },
   quickTxt: { fontWeight: '700', color: INK, fontSize: 14 },
   dots: { position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row' },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.6)', marginHorizontal: 3 },
   dotOn: { width: 20, backgroundColor: '#fff' },
   photoCount: { position: 'absolute', bottom: 12, right: 14, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
   detailTopBar: { position: 'absolute', top: 16, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' },
-  roundBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center' },
+  roundBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.95)', alignItems: 'center', justifyContent: 'center' },
   metaChip: { backgroundColor: CARD, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8, marginBottom: 8 },
   metaTxt: { fontWeight: '700', color: INK, fontSize: 13 },
   donorCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 20, padding: 14, marginTop: 14 },
   verified: { backgroundColor: B_LIGHT, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
   miniMap: { height: 150, borderRadius: 20, overflow: 'hidden' },
+  glassShadow: { shadowColor: '#2A1060', shadowOpacity: 0.12, shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 10 },
+  tabIcon: { width: 44, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  tabIconOn: { backgroundColor: 'rgba(112,40,232,0.12)' },
+  glassFooter: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 30 },
   stickyFooter: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 30, borderTopWidth: 1, borderTopColor: '#EFEFF2', backgroundColor: '#fff' },
   optCheck: { position: 'absolute', right: 16, top: '50%', marginTop: 1, width: 22, height: 22, borderRadius: 11, backgroundColor: B, alignItems: 'center', justifyContent: 'center' },
   pointsPill: { backgroundColor: B_LIGHT, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
@@ -3526,24 +3582,10 @@ const st = StyleSheet.create({
   bigAvatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: B, alignItems: 'center', justifyContent: 'center' },
   statBox: { flex: 1, alignItems: 'center', backgroundColor: CARD, borderRadius: 18, paddingVertical: 14, marginHorizontal: 4 },
   settingRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
-  tabBar: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#EFEFF2', paddingTop: 8, paddingBottom: 4, backgroundColor: '#fff' },
-  tabBtn: { flex: 1, alignItems: 'center' },
-  tabTxt: { fontSize: 11, fontWeight: '700', color: SUB, marginTop: 2 },
-  tabAdd: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: B,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 6,
-    marginTop: -26,
-    shadowColor: B,
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
+  tabBar: { position: 'absolute', left: 16, right: 16, height: 68, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 },
+  tabBtn: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tabTxt: { fontSize: 10.5, fontWeight: '700', color: '#6E6A80', marginTop: 1 },
+  tabAdd: { width: 52, height: 52, borderRadius: 26, backgroundColor: B, alignItems: 'center', justifyContent: 'center', marginHorizontal: 4, shadowColor: B, shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
   statusCard: { backgroundColor: B_LIGHT, borderRadius: 20, padding: 18, alignItems: 'center' },
   inboxHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#EFEFF2' },
   reqCard: { backgroundColor: CARD, borderRadius: 20, padding: 16, marginBottom: 12 },
@@ -3553,7 +3595,6 @@ const st = StyleSheet.create({
     position: 'absolute',
     left: 12,
     right: 12,
-    backgroundColor: '#fff',
     borderRadius: 22,
     padding: 14,
     shadowColor: '#000',
@@ -3595,8 +3636,8 @@ const st = StyleSheet.create({
   zero: { color: B, fontWeight: '800', fontSize: 17 },
   hTrack: { height: 18, borderRadius: 9, backgroundColor: '#E5E5EA', marginTop: 8, overflow: 'hidden' },
   hBar: { height: '100%', borderRadius: 9 },
-  itemCard: { backgroundColor: '#fff', borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: '#EFEFF2' },
-  freeBadge: { position: 'absolute', top: 10, left: 10, backgroundColor: '#fff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  itemCard: { backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,1)' },
+  freeBadge: { position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(255,255,255,0.88)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   freeBadgeTxt: { color: GREEN, fontWeight: '900', fontSize: 12 },
   itemTitle: { fontSize: 16, fontWeight: '700', color: INK },
   itemMeta: { fontSize: 13, color: SUB, marginTop: 3 },
