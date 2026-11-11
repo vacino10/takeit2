@@ -2594,8 +2594,8 @@ function HomeTab({ ctx }) {
               onChangeText={setQ}
               placeholder="Hledat věci…"
               placeholderTextColor="#9A9AA0"
-              maxFontSizeMultiplier={1.2}
-              style={{ flex: 1, height: 46, fontSize: 16, marginLeft: 8, color: INK, paddingVertical: 0, paddingTop: 0, paddingBottom: 0 }}
+              allowFontScaling={false}
+              style={{ flex: 1, fontSize: 17, marginLeft: 8, color: INK, paddingVertical: 12 }}
               returnKeyType="search"
               clearButtonMode="never"
             />
@@ -3379,7 +3379,7 @@ const st = StyleSheet.create({
   chipSm: { paddingVertical: 9, paddingHorizontal: 11, borderRadius: 18, backgroundColor: CARD, marginRight: 6 },
   chipSmTxt: { fontSize: 13, fontWeight: '700', color: INK },
   contactCircle: { width: 58, height: 58, borderRadius: 29, borderWidth: 2, borderColor: '#ECECF0', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 16, paddingHorizontal: 14, height: 46 },
+  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 16, paddingHorizontal: 14, minHeight: 46 },
   filterBtn: { width: 46, height: 46, borderRadius: 16, backgroundColor: CARD, alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
   quickChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: CARD, marginRight: 8 },
   quickChipOn: { backgroundColor: B },
