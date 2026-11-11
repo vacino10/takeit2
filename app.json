@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#7028E8"
+      "backgroundColor": "#6F15E5"
     },
     "ios": {
       "bundleIdentifier": "cz.takeit.app",
@@ -26,8 +26,8 @@
     "android": {
       "package": "cz.takeit.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#7028E8"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#6F15E5"
       },
       "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },

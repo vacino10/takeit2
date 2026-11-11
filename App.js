@@ -280,24 +280,11 @@ function Logo({ size = 40, color = B }) {
   return <Image source={LOGO_IMG} style={{ height: h, width: h * LOGO_RATIO, tintColor: color }} resizeMode="contain" accessibilityLabel="givo" />;
 }
 
+const APP_ICON_IMG = require('./assets/icon.png');
 function AppIcon({ size = 120 }) {
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.24,
-        backgroundColor: B,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: B,
-        shadowOpacity: 0.35,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 10 },
-        elevation: 10,
-      }}
-    >
-      <Image source={LOGO_IMG} style={{ width: size * 0.72, height: (size * 0.72) / LOGO_RATIO, tintColor: '#fff', marginTop: size * 0.03 }} resizeMode="contain" />
+    <View style={{ width: size, height: size, borderRadius: size * 0.24, shadowColor: B, shadowOpacity: 0.35, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 10 }}>
+      <Image source={APP_ICON_IMG} style={{ width: size, height: size, borderRadius: size * 0.24 }} />
     </View>
   );
 }
