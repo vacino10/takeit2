@@ -74,3 +74,15 @@ Pokud první build spadne na vytváření certifikátů, je potřeba jednou spus
 - Přihlášení přes Apple
 - Limity proti spamu (10 inzerátů / 20 žádostí denně)
 - Přesná poloha se nikdy neukládá (zaokrouhlí se na ~500 m)
+
+## Web (landing page, podmínky, GDPR) na Vercelu
+
+Web je ve složce `web/` (čisté HTML/CSS, žádný build).
+
+1. vercel.com → **Add New… → Project** → importuj repo `takeit2`.
+2. **Root Directory** nastav na `web`, Framework Preset **Other**, nic dalšího → **Deploy**.
+3. V Supabase SQL Editoru spusť `supabase/migrations/0004_waitlist.sql` (čekací listina z webu).
+4. V `web/*.html` doplň žlutě zvýrazněné údaje (provozovatel, IČO, adresa, region Supabase) a v `src/config.js` nastav adresy `TERMS_URL`, `PRIVACY_URL` a `SUPPORT_EMAIL` na skutečné.
+
+Stránky: `/`, `/podminky`, `/soukromi`, `/podpora`, `/smazani-uctu` (URL pro App Store: Support URL = `/podpora`, Privacy Policy URL = `/soukromi`).
+E-maily z čekací listiny najdeš v Supabase → Table Editor → `waitlist`.

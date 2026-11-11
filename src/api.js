@@ -35,7 +35,21 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
+// Smaže fotky z úložiště (podle veřejných URL uložených u věcí)
+async function removePhotos(urls) {
+  const paths = (urls || [])
+    .map((u) => String(u).split('/object/public/photos/')[1])
+    .filter(Boolean)
+    .map((p) => decodeURIComponent(p.split('?')[0]));
+  if (paths.length) await supabase.storage.from('photos').remove(paths).catch(() => {});
+}
+
 export async function deleteAccount() {
+  const { data: u } = await supabase.auth.getUser();
+  if (u && u.user) {
+    const { data: mine } = await supabase.from('items').select('photos').eq('owner_id', u.user.id);
+    await removePhotos((mine || []).flatMap((x) => x.photos || []));
+  }
   const { error } = await supabase.rpc('delete_account');
   if (error) throw error;
   await supabase.auth.signOut();
@@ -130,7 +144,9 @@ export async function createItem(uid, item) {
 }
 
 export async function deleteItem(id) {
+  const { data: it } = await supabase.from('items').select('photos').eq('id', id).maybeSingle();
   const { error } = await supabase.from('items').delete().eq('id', id);
+  if (!error && it) await removePhotos(it.photos);
   if (error) throw error;
 }
 
