@@ -2892,7 +2892,7 @@ function ProfileTab({ ctx, onRestart }) {
         <Header title="Profil" />
         <LoginPrompt ctx={ctx} text="Přihlášení zabere jedno klepnutí přes Apple." />
         <View style={{ paddingHorizontal: 24, marginTop: 30 }}>
-          <SettingsLinks />
+          <SettingsLinks onReplay={ctx.replayOnboarding} />
         </View>
       </View>
     );
@@ -2966,7 +2966,7 @@ function ProfileTab({ ctx, onRestart }) {
         </View>
 
         <Text style={st.section}>Nastavení a pomoc</Text>
-        <SettingsLinks />
+        <SettingsLinks onReplay={ctx.replayOnboarding} />
         <View style={[st.chartCard, { paddingVertical: 4, marginTop: 12 }]}>
           <Pressable
             style={st.settingRow}
@@ -2996,8 +2996,9 @@ function ProfileTab({ ctx, onRestart }) {
   );
 }
 
-function SettingsLinks() {
+function SettingsLinks({ onReplay }) {
   const rows = [
+    ...(onReplay ? [['🔁', 'Projít úvod znovu', onReplay]] : []),
     ['📄', 'Podmínky použití', () => Linking.openURL(TERMS_URL)],
     ['🔒', 'Ochrana soukromí', () => Linking.openURL(PRIVACY_URL)],
     ['✉️', 'Napsat podpoře', () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=TAKE.it`).catch(() => Alert.alert('Podpora', SUPPORT_EMAIL))],
@@ -3207,6 +3208,13 @@ function Root() {
       ctx.requireLogin((uid) => run(() => api.blockUser(uid, otherId), { title: 'Uživatel zablokován', body: 'Jeho věci už neuvidíš a on neuvidí tvoje.' })),
     updateName: (name) => myId && run(() => api.updateName(myId, name)),
     signOut: () => run(() => api.signOut()),
+    replayOnboarding: async () => {
+      await AsyncStorage.removeItem('onboarded').catch(() => {});
+      setData({});
+      setPoints(0);
+      setTab('home');
+      setRoute('welcome');
+    },
     deleteAccount: () => run(() => api.deleteAccount(), { title: 'Účet smazán', body: 'Mrzí nás, že odcházíš. Kdykoli se můžeš vrátit.' }),
   };
 
