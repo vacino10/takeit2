@@ -20,6 +20,7 @@ import {
   KeyboardAvoidingView,
   StatusBar,
   Linking,
+  Share,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
@@ -31,11 +32,13 @@ import * as ImagePicker from 'expo-image-picker';
 // Mapa jen na telefonu (na webu by react-native-maps spadla)
 let MapView = null;
 let Marker = null;
+let MapCircle = null;
 if (Platform.OS !== 'web') {
   try {
     const maps = require('react-native-maps');
     MapView = maps.default;
     Marker = maps.Marker;
+    MapCircle = maps.Circle;
   } catch (e) {}
 }
 
@@ -87,7 +90,13 @@ const ITEMS_RAW = [
 
 const VALUES = { Pohovka: 3000, 'Dětské kolo': 1200, 'Monitor 24"': 1500, Kávovar: 800, Monstera: 400, 'Stolní lampa': 300, 'Krabice knih': 500, 'Zimní bunda': 900, Plyšáci: 300, 'Jídelní židle': 600, Sluchátka: 700, 'Sada hrnků': 200 };
 const CENTER = { latitude: 50.083, longitude: 14.43 };
-const ITEMS = ITEMS_RAW.map((it, i) => ({ ...it, lat: CENTER.latitude + (((i * 37) % 11) - 5) * 0.0045, lng: CENTER.longitude + (((i * 53) % 13) - 6) * 0.006, v: VALUES[it.t] || 500, demo: true, contact: DEMO_CONTACT, d: 'Ve velmi dobrém stavu, vyzvednutí po domluvě.', chip: 'U dveří' }));
+const DONORS = [
+  { n: 'Petra', e: '👩‍🦰', r: '4,9', c: 12, resp: 'do 1 h' },
+  { n: 'Tomáš', e: '🧔', r: '5,0', c: 4, resp: 'do 30 min' },
+  { n: 'Lucie', e: '👩', r: '4,8', c: 21, resp: 'do 2 h' },
+  { n: 'Martin', e: '👨', r: '4,7', c: 7, resp: 'během dne' },
+];
+const ITEMS = ITEMS_RAW.map((it, i) => ({ ...it, donor: DONORS[i % DONORS.length], lat: CENTER.latitude + (((i * 37) % 11) - 5) * 0.0045, lng: CENTER.longitude + (((i * 53) % 13) - 6) * 0.006, v: VALUES[it.t] || 500, demo: true, contact: DEMO_CONTACT, d: 'Ve velmi dobrém stavu, vyzvednutí po domluvě.', chip: 'U dveří' }));
 
 const CATEGORIES = [
   ['🛋️', 'Nábytek'], ['📱', 'Elektronika'], ['👕', 'Oblečení'], ['🧸', 'Pro děti'],
@@ -1450,6 +1459,7 @@ function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideS
               t: title.trim(),
               d: desc.trim(),
               uri: photos[0],
+              photos,
               chip,
               e: '🎁',
               km: '0',
@@ -1466,65 +1476,211 @@ function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideS
   );
 }
 
+function Gallery({ item, height }) {
+  const [page, setPage] = useState(0);
+  const slides = item.photos && item.photos.length
+    ? item.photos.map((u) => ({ uri: u }))
+    : [
+        { e: item.e, size: 130, rot: '0deg' },
+        { e: item.e, size: 190, rot: '-12deg' },
+        { e: item.e, size: 90, rot: '8deg' },
+      ];
+  return (
+    <View style={{ height }}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / W))}
+      >
+        {slides.map((sl, k) => (
+          <LinearGradient key={k} colors={k % 2 ? [item.g[1], item.g[0]] : item.g} style={{ width: W, height, alignItems: 'center', justifyContent: 'center' }}>
+            {sl.uri ? (
+              <Image source={{ uri: sl.uri }} style={StyleSheet.absoluteFill} />
+            ) : (
+              <Text style={{ fontSize: sl.size, transform: [{ rotate: sl.rot }] }}>{sl.e}</Text>
+            )}
+          </LinearGradient>
+        ))}
+      </ScrollView>
+      {slides.length > 1 ? (
+        <View style={st.dots}>
+          {slides.map((_, k) => (
+            <View key={k} style={[st.dot, page === k && st.dotOn]} />
+          ))}
+        </View>
+      ) : null}
+      <View style={st.photoCount}>
+        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>
+          {page + 1}/{slides.length}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function ItemDetail({ item, onClose, ctx }) {
   const [asking, setAsking] = useState(false);
   const [msg, setMsg] = useState('Ahoj, můžu si to vyzvednout dnes večer?');
-  useEffect(() => setAsking(false), [item && item.t]);
+  const heart = useRef(new Animated.Value(1)).current;
+  useEffect(() => setAsking(false), [item && (item.id || item.t)]);
   if (!item) return null;
   const own = !item.demo;
   const status = ctx.outReq[item.t];
   const methods = (item.contact && item.contact.methods) || [];
   const incoming = ctx.requests.filter((r) => r.itemId === item.id);
   const pending = incoming.filter((r) => r.status === 'pending').length;
+  const favs = ctx.data.favs || [];
+  const fav = favs.includes(item.t);
+  const donor = own ? { n: ctx.data.name || 'Ty', e: '🙂', r: '–', c: ctx.myItems.length, resp: '' } : item.donor || DONORS[0];
+  const lat = item.lat || 50.08;
+  const lng = item.lng || 14.43;
+  const toggleFav = () => {
+    tap();
+    heart.setValue(1.4);
+    Animated.spring(heart, { toValue: 1, friction: 3, useNativeDriver: true }).start();
+    ctx.set('favs', fav ? favs.filter((x) => x !== item.t) : [...favs, item.t]);
+  };
+  const share = () => Share.share({ message: `Na TAKE.IT je zdarma „${item.t}“ 🎁 Kousek ode mě v Praze – mrkni do appky!` }).catch(() => {});
+
+  let footer = null;
+  if (own) {
+    footer = item.status === 'reserved' ? (
+      <Button title="Označit jako předané ✅" style={{ marginBottom: 0 }} onPress={() => { ctx.markGiven(item.id); onClose(); }} />
+    ) : pending ? (
+      <Button title={`Zobrazit zájemce (${pending})`} style={{ marginBottom: 0 }} onPress={() => { onClose(); ctx.openInbox(); }} />
+    ) : null;
+  } else if (status === 'accepted') {
+    footer = (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+        {CONTACTS.filter((c) => methods.includes(c.id)).map((c) => (
+          <Pressable
+            key={c.id}
+            onPress={() => {
+              tap();
+              openContact(c.id, item);
+            }}
+            style={({ pressed }) => [st.contactBtn, { backgroundColor: c.color, flex: 1, marginHorizontal: 4, marginTop: 0 }, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={{ fontSize: 18 }}>{c.e}</Text>
+            <Text style={[st.contactBtnTxt, { fontSize: 15 }]}>{c.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    );
+  } else if (status === 'pending') {
+    footer = (
+      <View style={[st.statusCard, { flexDirection: 'row', justifyContent: 'center', paddingVertical: 16 }]}>
+        <ActivityIndicator color={B} />
+        <Text style={[st.h2, { marginLeft: 10, fontSize: 16 }]}>Čekáme na potvrzení dárce…</Text>
+      </View>
+    );
+  } else if (asking) {
+    footer = <Button title="Odeslat žádost" disabled={!msg.trim()} style={{ marginBottom: 0 }} onPress={() => ctx.requestItem(item, msg.trim())} />;
+  } else {
+    footer = <Button title="🙋  Mám zájem" style={{ marginBottom: 0 }} onPress={() => setAsking(true)} />;
+  }
+
   return (
     <Modal visible={!!item} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#fff' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={{ paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
-          <LinearGradient colors={item.g} style={{ height: 300, alignItems: 'center', justifyContent: 'center' }}>
-            {item.uri ? <Image source={{ uri: item.uri }} style={StyleSheet.absoluteFill} /> : <Text style={{ fontSize: 120 }}>{item.e}</Text>}
-            <Pressable onPress={onClose} hitSlop={12} style={st.closeBtn}>
-              <Text style={{ fontSize: 22, color: INK }}>✕</Text>
-            </Pressable>
-          </LinearGradient>
+          <View>
+            <Gallery item={item} height={340} />
+            <View style={st.detailTopBar}>
+              <Pressable onPress={onClose} hitSlop={10} style={st.roundBtn}>
+                <Text style={{ fontSize: 18, color: INK }}>✕</Text>
+              </Pressable>
+              <View style={{ flexDirection: 'row' }}>
+                <Pressable onPress={share} hitSlop={10} style={[st.roundBtn, { marginRight: 10 }]}>
+                  <Text style={{ fontSize: 17 }}>↗︎</Text>
+                </Pressable>
+                {!own ? (
+                  <Pressable onPress={toggleFav} hitSlop={10} style={st.roundBtn}>
+                    <Animated.Text style={{ fontSize: 18, transform: [{ scale: heart }] }}>{fav ? '💜' : '🤍'}</Animated.Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          </View>
+
           <View style={{ padding: 24 }}>
             <Text style={st.h1}>{item.t}</Text>
-            <Text style={{ color: GREEN, fontWeight: '900', fontSize: 22, marginTop: 6 }}>Zdarma</Text>
-            <Text style={[st.sub, { marginTop: 10 }]}>📍 {own ? 'Praha • právě teď' : `${item.km} km • před ${item.m} min`}</Text>
-            {item.chip ? <Text style={st.sub}>🚪 Vyzvednutí: {item.chip}</Text> : null}
-            {item.d ? <Text style={[st.body, { marginTop: 16 }]}>{item.d}</Text> : null}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 }}>
+              <View style={[st.metaChip, { backgroundColor: '#DDF7E5' }]}>
+                <Text style={{ color: GREEN, fontWeight: '900' }}>ZDARMA</Text>
+              </View>
+              <View style={st.metaChip}>
+                <Text style={st.metaTxt}>📍 {own ? 'Tvoje místo' : `${item.km} km`}</Text>
+              </View>
+              <View style={st.metaChip}>
+                <Text style={st.metaTxt}>🕒 {own ? 'právě teď' : `před ${item.m} min`}</Text>
+              </View>
+              {item.chip ? (
+                <View style={st.metaChip}>
+                  <Text style={st.metaTxt}>🚪 {item.chip}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={st.donorCard}>
+              <View style={st.avatar}>
+                <Text style={{ fontSize: 24 }}>{donor.e}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={st.h2}>{own ? 'Tvoje věc' : donor.n}</Text>
+                <Text style={st.chartAxis}>
+                  {own ? `Daroval jsi ${donor.c} ${donor.c === 1 ? 'věc' : 'věci'}` : `⭐ ${donor.r} • daroval/a ${donor.c} věcí • odpovídá ${donor.resp}`}
+                </Text>
+              </View>
+              {!own ? (
+                <View style={st.verified}>
+                  <Text style={{ color: B, fontWeight: '800', fontSize: 11 }}>✓ Ověřený</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {item.d ? (
+              <>
+                <Text style={st.section}>Popis</Text>
+                <Text style={st.body}>{item.d}</Text>
+              </>
+            ) : null}
+
+            <Text style={st.section}>Kde to je</Text>
+            <View style={st.miniMap}>
+              {MapView ? (
+                <MapView
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="none"
+                  initialRegion={{ latitude: lat, longitude: lng, latitudeDelta: 0.025, longitudeDelta: 0.025 }}
+                  scrollEnabled={false}
+                  zoomEnabled={false}
+                >
+                  {MapCircle ? (
+                    <MapCircle center={{ latitude: lat, longitude: lng }} radius={600} fillColor="rgba(112,40,232,0.18)" strokeColor={B} strokeWidth={2} />
+                  ) : null}
+                </MapView>
+              ) : (
+                <LinearGradient colors={['#EEF6E8', '#DCEFD3']} style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+                  <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(112,40,232,0.18)', borderWidth: 2, borderColor: B }} />
+                </LinearGradient>
+              )}
+            </View>
+            <Text style={[st.chartAxis, { marginTop: 8 }]}>🔒 Přesné místo ti dárce pošle až po potvrzení.</Text>
 
             {own ? (
-              <View style={[st.chartCard, { marginTop: 26 }]}>
-                <Text style={st.h2}>Tohle je tvoje věc</Text>
+              <View style={[st.chartCard, { marginTop: 22 }]}>
+                <Text style={st.h2}>Stav</Text>
                 <Text style={st.chartAxis}>
                   {item.status === 'given'
                     ? '✅ Předáno – díky, že posíláš věci dál!'
                     : item.status === 'reserved'
                     ? '🤝 Rezervováno – zájemce dostal tvůj kontakt.'
                     : incoming.length
-                    ? `Zájemci: ${incoming.length}${pending ? ` • čeká na tebe ${pending}` : ''}`
-                    : 'Zatím se nikdo nehlásil. Jakmile ano, přijde ti upozornění.'}
+                    ? `👀 ${item.views || 0} zobrazení • 🙋 ${incoming.length} zájemci${pending ? ` • čeká ${pending}` : ''}`
+                    : `👀 ${item.views || 0} zobrazení • zatím bez zájemců`}
                 </Text>
-                {pending ? (
-                  <Button
-                    title={`Zobrazit zájemce (${pending})`}
-                    style={{ marginTop: 14, marginBottom: 0 }}
-                    onPress={() => {
-                      onClose();
-                      ctx.openInbox();
-                    }}
-                  />
-                ) : null}
-                {item.status === 'reserved' ? (
-                  <Button
-                    title="Označit jako předané ✅"
-                    style={{ marginTop: 14, marginBottom: 0 }}
-                    onPress={() => {
-                      ctx.markGiven(item.id);
-                      onClose();
-                    }}
-                  />
-                ) : null}
                 {item.status !== 'given' ? (
                   <Pressable
                     onPress={() => {
@@ -1533,60 +1689,31 @@ function ItemDetail({ item, onClose, ctx }) {
                     }}
                     hitSlop={10}
                   >
-                    <Text style={[st.secondary, { marginTop: 16, marginBottom: 0, color: '#FF3B30' }]}>Smazat inzerát</Text>
+                    <Text style={[st.secondary, { marginTop: 14, marginBottom: 0, color: '#FF3B30', textAlign: 'left' }]}>Smazat inzerát</Text>
                   </Pressable>
                 ) : null}
               </View>
-            ) : status === 'accepted' ? (
-              <View style={{ marginTop: 26 }}>
-                <View style={[st.statusCard, { backgroundColor: '#DDF7E5' }]}>
-                  <Text style={st.h2}>✅ Dárce potvrdil – je to tvoje!</Text>
-                  <Text style={st.chartAxis}>Kontakt je odemčený. Domluvte si vyzvednutí.</Text>
-                </View>
-                {CONTACTS.filter((c) => methods.includes(c.id)).map((c, i) => (
-                  <FadeIn key={c.id} delay={i * 60}>
-                    <Pressable
-                      onPress={() => {
-                        tap();
-                        openContact(c.id, item);
-                      }}
-                      style={({ pressed }) => [st.contactBtn, { backgroundColor: c.color }, pressed && { opacity: 0.85 }]}
-                    >
-                      <Text style={{ fontSize: 20 }}>{c.e}</Text>
-                      <Text style={st.contactBtnTxt}>
-                        {c.id === 'phone' ? 'Zavolat' : c.id === 'email' ? 'Napsat e-mail' : `Napsat přes ${c.label}`}
-                      </Text>
-                    </Pressable>
-                  </FadeIn>
-                ))}
+            ) : null}
+
+            {!own && status === 'accepted' ? (
+              <View style={[st.statusCard, { marginTop: 22, backgroundColor: '#DDF7E5' }]}>
+                <Text style={st.h2}>✅ Dárce potvrdil – je to tvoje!</Text>
+                <Text style={st.chartAxis}>Kontakt je odemčený, ozvi se mu tlačítkem dole.</Text>
               </View>
-            ) : status === 'pending' ? (
-              <View style={[st.statusCard, { marginTop: 26 }]}>
-                <ActivityIndicator color={B} />
-                <Text style={[st.h2, { marginTop: 10, textAlign: 'center' }]}>Čekáme na potvrzení dárce…</Text>
-                <Text style={[st.chartAxis, { textAlign: 'center' }]}>Jakmile potvrdí, přijde ti upozornění a odemkne se kontakt.</Text>
-              </View>
-            ) : asking ? (
-              <FadeIn style={{ marginTop: 26 }}>
-                <Text style={st.section}>Zpráva pro dárce</Text>
-                <TextInput value={msg} onChangeText={setMsg} multiline style={[st.input, { height: 90, textAlignVertical: 'top' }]} />
-                <Button
-                  title="Odeslat žádost"
-                  style={{ marginTop: 14 }}
-                  disabled={!msg.trim()}
-                  onPress={() => ctx.requestItem(item, msg.trim())}
-                />
+            ) : null}
+
+            {!own && !status && asking ? (
+              <FadeIn style={{ marginTop: 22 }}>
+                <Text style={st.section}>Zpráva pro {donor.n}</Text>
+                <TextInput value={msg} onChangeText={setMsg} multiline autoFocus style={[st.input, { height: 90, textAlignVertical: 'top' }]} />
               </FadeIn>
-            ) : (
-              <View style={{ marginTop: 26 }}>
-                <Button title="🙋  Mám zájem" onPress={() => setAsking(true)} />
-                <Text style={[st.chartAxis, { textAlign: 'center' }]}>
-                  🔒 Kontakt na dárce se odemkne, až potvrdí tvoji žádost.
-                </Text>
-              </View>
-            )}
+            ) : null}
+            {!own && !status && !asking ? (
+              <Text style={[st.chartAxis, { marginTop: 18 }]}>🔒 Kontakt na dárce se odemkne, až potvrdí tvoji žádost.</Text>
+            ) : null}
           </View>
         </ScrollView>
+        {footer ? <View style={st.stickyFooter}>{footer}</View> : null}
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -2090,6 +2217,62 @@ function Paywall({ visible, onClose, onUnlock, discount = 0 }) {
   );
 }
 
+function Spark({ x, y, size, delay, dur, drift }) {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(a, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(a, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        left: x,
+        top: y,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: '#fff',
+        shadowColor: '#fff',
+        shadowOpacity: 1,
+        shadowRadius: 3,
+        opacity: a.interpolate({ inputRange: [0, 0.3, 0.7, 1], outputRange: [0, 1, 0.9, 0] }),
+        transform: [
+          { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, 40] }) },
+          { translateX: a.interpolate({ inputRange: [0, 1], outputRange: [0, drift] }) },
+          { scale: a.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.4, 1.2, 0.6] }) },
+        ],
+      }}
+    />
+  );
+}
+
+function Sparkles({ count = 70 }) {
+  const H = Dimensions.get('window').height;
+  const sparks = useRef(
+    Array.from({ length: count }, () => ({
+      x: Math.random() * W,
+      y: Math.random() * H * 0.75,
+      size: 1.5 + Math.random() * 3,
+      delay: Math.random() * 3000,
+      dur: 1800 + Math.random() * 2600,
+      drift: (Math.random() - 0.5) * 24,
+    }))
+  ).current;
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {sparks.map((p, i) => (
+        <Spark key={i} {...p} />
+      ))}
+    </View>
+  );
+}
+
 function LockedOverlay({ ctx, onUnlock, onSkip }) {
   const sheet = useRef(new Animated.Value(0)).current;
   const marquee = useRef(new Animated.Value(0)).current;
@@ -2122,6 +2305,7 @@ function LockedOverlay({ ctx, onUnlock, onSkip }) {
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <BlurView intensity={30} tint="light" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
       <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(112,40,232,0.18)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <Sparkles />
       <Animated.View
         style={[
           st.sheet,
@@ -3066,6 +3250,18 @@ const st = StyleSheet.create({
     padding: 14,
   },
   photoThumb: { width: 110, height: 110, borderRadius: 16, marginRight: 10 },
+  dots: { position: 'absolute', bottom: 14, alignSelf: 'center', flexDirection: 'row' },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.6)', marginHorizontal: 3 },
+  dotOn: { width: 20, backgroundColor: '#fff' },
+  photoCount: { position: 'absolute', bottom: 12, right: 14, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+  detailTopBar: { position: 'absolute', top: 16, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' },
+  roundBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center' },
+  metaChip: { backgroundColor: CARD, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8, marginBottom: 8 },
+  metaTxt: { fontWeight: '700', color: INK, fontSize: 13 },
+  donorCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 20, padding: 14, marginTop: 14 },
+  verified: { backgroundColor: B_LIGHT, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
+  miniMap: { height: 150, borderRadius: 20, overflow: 'hidden' },
+  stickyFooter: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 30, borderTopWidth: 1, borderTopColor: '#EFEFF2', backgroundColor: '#fff' },
   optCheck: { position: 'absolute', right: 16, top: '50%', marginTop: 1, width: 22, height: 22, borderRadius: 11, backgroundColor: B, alignItems: 'center', justifyContent: 'center' },
   pointsPill: { backgroundColor: B_LIGHT, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
   floatCard: { position: 'absolute', width: 126, backgroundColor: '#fff', borderRadius: 18, padding: 8, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
