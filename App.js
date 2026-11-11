@@ -493,6 +493,222 @@ function GiveSavings({ next }) {
   );
 }
 
+// --- Animace podle důvodu darování ---
+function ClearAnim() {
+  const items = ['🛋️', '📚', '🧸', '🪑', '💡', '🧥'];
+  const anims = useRef(items.map(() => new Animated.Value(0))).current;
+  const sparkle = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(500),
+      Animated.stagger(220, anims.map((a) => Animated.timing(a, { toValue: 1, duration: 600, easing: Easing.in(Easing.cubic), useNativeDriver: true }))),
+      Animated.spring(sparkle, { toValue: 1, friction: 5, useNativeDriver: true }),
+    ]).start(() => success());
+  }, []);
+  return (
+    <View style={[st.chartCard, { height: 240, justifyContent: 'center' }]}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around' }}>
+        {items.map((e, i) => (
+          <Animated.Text
+            key={e}
+            style={{
+              fontSize: 54,
+              width: '33%',
+              textAlign: 'center',
+              marginVertical: 8,
+              opacity: anims[i].interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+              transform: [
+                { translateY: anims[i].interpolate({ inputRange: [0, 1], outputRange: [0, -90] }) },
+                { scale: anims[i].interpolate({ inputRange: [0, 1], outputRange: [1, 0.5] }) },
+                { rotate: anims[i].interpolate({ inputRange: [0, 1], outputRange: ['0deg', i % 2 ? '25deg' : '-25deg'] }) },
+              ],
+            }}
+          >
+            {e}
+          </Animated.Text>
+        ))}
+      </View>
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', opacity: sparkle, transform: [{ scale: sparkle }] }]}
+      >
+        <Text style={{ fontSize: 84 }}>✨</Text>
+        <Text style={[st.bigNum, { fontSize: 40 }]}>Čisto!</Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+function WasteAnim() {
+  const items = ['🛋️', '🚲', '🧸', '☕'];
+  const anims = useRef(items.map(() => new Animated.Value(0))).current;
+  const spin = useRef(new Animated.Value(0)).current;
+  const colW = (W - 48 - 36) / 2;
+  useEffect(() => {
+    Animated.loop(Animated.timing(spin, { toValue: 1, duration: 4000, easing: Easing.linear, useNativeDriver: true })).start();
+    Animated.sequence([
+      Animated.delay(500),
+      Animated.stagger(300, anims.map((a) => Animated.spring(a, { toValue: 1, friction: 7, useNativeDriver: false }))),
+    ]).start(() => success());
+  }, []);
+  return (
+    <View style={st.chartCard}>
+      <Animated.Text
+        style={{ fontSize: 44, textAlign: 'center', transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }}
+      >
+        ♻️
+      </Animated.Text>
+      <View style={{ flexDirection: 'row', marginTop: 10, marginBottom: 6 }}>
+        <Text style={[st.chartL, { width: colW, textAlign: 'center', color: '#FF3B30' }]}>🗑️ Skládka</Text>
+        <Text style={[st.chartL, { width: colW, textAlign: 'center', color: GREEN }]}>🏡 Nový domov</Text>
+      </View>
+      {items.map((e, i) => (
+        <Animated.View
+          key={e}
+          style={{
+            width: colW,
+            alignItems: 'center',
+            marginVertical: 5,
+            transform: [{ translateX: anims[i].interpolate({ inputRange: [0, 1], outputRange: [0, colW] }) }],
+          }}
+        >
+          <Animated.View
+            style={{
+              width: 58,
+              height: 58,
+              borderRadius: 18,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: anims[i].interpolate({ inputRange: [0, 1], outputRange: ['#FFE1DF', '#DDF7E5'] }),
+            }}
+          >
+            <Text style={{ fontSize: 30 }}>{e}</Text>
+          </Animated.View>
+        </Animated.View>
+      ))}
+    </View>
+  );
+}
+
+function NeighborsAnim() {
+  const people = ['👩', '👨‍🦰', '👵', '🧑', '👨‍👧', '👱‍♀️'];
+  const pops = useRef(people.map(() => new Animated.Value(0))).current;
+  const pulse = useRef(new Animated.Value(0)).current;
+  const hearts = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
+  const R = 105;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ])
+    ).start();
+    Animated.stagger(180, pops.map((a) => Animated.spring(a, { toValue: 1, friction: 5, useNativeDriver: true }))).start(() => success());
+    hearts.forEach((h, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 600),
+          Animated.timing(h, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          Animated.timing(h, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ])
+      ).start()
+    );
+  }, []);
+  return (
+    <View style={{ height: 290, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ position: 'absolute', width: R * 2, height: R * 2, borderRadius: R, borderWidth: 2, borderColor: B_LIGHT, borderStyle: 'dashed' }} />
+      {people.map((e, i) => {
+        const ang = (i / people.length) * Math.PI * 2 - Math.PI / 2;
+        return (
+          <Animated.View
+            key={e}
+            style={{
+              position: 'absolute',
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              backgroundColor: B_LIGHT,
+              alignItems: 'center',
+              justifyContent: 'center',
+              transform: [{ translateX: Math.cos(ang) * R }, { translateY: Math.sin(ang) * R }, { scale: pops[i] }],
+            }}
+          >
+            <Text style={{ fontSize: 30 }}>{e}</Text>
+          </Animated.View>
+        );
+      })}
+      <Animated.View
+        style={{
+          width: 96,
+          height: 96,
+          borderRadius: 48,
+          backgroundColor: B,
+          alignItems: 'center',
+          justifyContent: 'center',
+          transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }],
+        }}
+      >
+        <Text style={{ fontSize: 44 }}>🎁</Text>
+      </Animated.View>
+      {hearts.map((h, i) => (
+        <Animated.Text
+          key={i}
+          style={{
+            position: 'absolute',
+            fontSize: 26,
+            opacity: h.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] }),
+            transform: [
+              { translateX: (i - 1) * 30 },
+              { translateY: h.interpolate({ inputRange: [0, 1], outputRange: [-40, -140] }) },
+            ],
+          }}
+        >
+          💜
+        </Animated.Text>
+      ))}
+    </View>
+  );
+}
+
+const REASON_SCREENS = {
+  'Rychle uklidit doma': {
+    title: 'Uklizeno za pár minut',
+    sub: 'Vyfotíš, přidáš – a sousedé si věci odnesou sami.',
+    foot: 'Žádné tahání, žádné stěhování. Jen víc místa doma.',
+    Anim: ClearAnim,
+  },
+  'Méně odpadu': {
+    title: 'Dej věcem druhý život',
+    sub: 'Místo na skládce skončí u někoho, komu udělají radost.',
+    foot: 'Každá darovaná věc je o jednu méně na skládce.',
+    Anim: WasteAnim,
+  },
+  'Pomoct sousedům': {
+    title: 'Udělej radost sousedům',
+    sub: 'Tvoje nepotřebná věc může někomu kousek od tebe hodně pomoct.',
+    foot: 'Na TAKE.IT darují sousedé sousedům. 💜',
+    Anim: NeighborsAnim,
+  },
+};
+
+function GiveImpact({ next, ctx }) {
+  const cfg = REASON_SCREENS[ctx.data.reason];
+  if (!cfg) return <GiveSavings next={next} />;
+  const { Anim } = cfg;
+  return (
+    <StepLayout title={cfg.title} subtitle={cfg.sub} onNext={next}>
+      <View style={{ flex: 1, justifyContent: 'center' }}>
+        <FadeIn delay={150}>
+          <Anim />
+        </FadeIn>
+        <FadeIn delay={1400}>
+          <Text style={[st.sub, { textAlign: 'center', marginTop: 24 }]}>{cfg.foot}</Text>
+        </FadeIn>
+      </View>
+    </StepLayout>
+  );
+}
+
 function GivePickup({ next, ctx }) {
   const [sel, setSel] = useState(ctx.data.pickup || null);
   const opts = ['Kdykoli dnes', 'Jen večer', 'O víkendu', 'Nejdřív mi napište'];
@@ -950,7 +1166,7 @@ function ItemDetail({ item, onClose }) {
   );
 }
 
-const GIVE_STEPS = [GiveReason, GiveSavings, GivePickup, NeighborsMap, GiveSpeed, NotifyGive, SetupGive, FirstItem];
+const GIVE_STEPS = [GiveReason, GiveImpact, GivePickup, NeighborsMap, GiveSpeed, NotifyGive, SetupGive, FirstItem];
 
 function Given({ ctx, onBrowse, onRestart }) {
   const item = ctx.data.item;
