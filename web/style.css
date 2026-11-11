@@ -170,8 +170,22 @@ footer small { color: var(--sub); }
   .nav a:not(.btn) { display: none; }
   .hero { padding-top: 36px; }
   .hero .wrap, .split { grid-template-columns: 1fr; }
-  .phones { height: 470px; max-width: 420px; margin: 0 auto; width: 100%; }
-  .phones .phone { --pw: 210px; }
+  /* hero na mobilu: telefony hned pod textem, formulář až pod nimi */
+  .hero { padding: 20px 0 24px; }
+  .hero .wrap { display: flex; flex-direction: column; gap: 0; }
+  .hero .wrap > div:first-child { display: contents; }
+  .hero .pill { order: 1; align-self: flex-start; }
+  .hero h1 { order: 2; margin: 14px 0 10px; font-size: 42px; text-align: left; align-self: stretch; }
+  .hero .lead { order: 3; font-size: 17px; margin-bottom: 4px; }
+  .hero .phones { order: 4; }
+  .hero .wl { order: 5; }
+  .hero .wl-note { order: 6; }
+  .hero .wl-ok { order: 7; }
+  .hero .stores { order: 8; }
+  .phones { height: 400px; max-width: 420px; margin: 0 auto 8px; width: 100%; }
+  .phones .phone { --pw: 178px; }
+  .phones .p1 { left: 8%; top: 26px; }
+  .phones .p2 { right: 6%; top: 0; }
   .steps, .cards { grid-template-columns: 1fr; }
   .step .phone { --pw: 210px; }
   .split .phones2 .phone { --pw: min(44vw, 210px); }
