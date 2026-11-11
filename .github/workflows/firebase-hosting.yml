@@ -1,0 +1,43 @@
+# Web givo (složka web/) → Firebase Hosting, při každém pushi do main.
+# Web je čisté HTML/CSS/JS – nic se nebuilduje, publikuje se složka web/ tak, jak je.
+name: Web → Firebase Hosting
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'firebase.json'
+      - '.github/workflows/firebase-hosting.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-hosting
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kontrola nastavení
+        env:
+          PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          HAS_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+        run: |
+          if [ -z "$PROJECT_ID" ]; then echo "::error::Chybí GitHub proměnná FIREBASE_PROJECT_ID (Settings → Secrets and variables → Actions → Variables)."; exit 1; fi
+          if [ "$HAS_KEY" != "true" ]; then echo "::error::Chybí GitHub secret FIREBASE_SERVICE_ACCOUNT (JSON klíč service accountu)."; exit 1; fi
+          test -f web/index.html || { echo "::error::Chybí web/index.html"; exit 1; }
+          echo "Build: žádný (statický web). Výstupní složka: web/ → projekt $PROJECT_ID"
+
+      - name: Nasazení na Firebase Hosting (live)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.FIREBASE_PROJECT_ID }}
+          channelId: live

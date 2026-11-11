@@ -86,3 +86,11 @@ Web je ve složce `web/` (čisté HTML/CSS, žádný build).
 
 Stránky: `/`, `/podminky`, `/soukromi`, `/podpora`, `/smazani-uctu` (URL pro App Store: Support URL = `/podpora`, Privacy Policy URL = `/soukromi`).
 E-maily z čekací listiny najdeš v Supabase → Table Editor → `waitlist`.
+
+## Web na Firebase Hosting (tarif Spark, zdarma)
+
+- Konfigurace: `firebase.json` (publikuje se složka `web/`, žádný build).
+- Automatické nasazení: `.github/workflows/firebase-hosting.yml` při pushi do `main` (jen když se změní `web/`).
+- Potřebné v GitHubu (Settings → Secrets and variables → Actions):
+  - **Variables** → `FIREBASE_PROJECT_ID` = ID Firebase projektu
+  - **Secrets** → `FIREBASE_SERVICE_ACCOUNT` = celý JSON klíč service accountu s rolemi *Firebase Hosting Admin* a *API Keys Viewer*
