@@ -19,6 +19,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   StatusBar,
+  Linking,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -55,7 +56,7 @@ const success = () => {
 const kc = (n) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
 // ---------- Data ----------
-const ITEMS = [
+const ITEMS_RAW = [
   { t: 'Pohovka', e: '🛋️', km: '1,2', m: 8, g: ['#EFE8FF', '#D9CCFF'] },
   { t: 'Dětské kolo', e: '🚲', km: '2,4', m: 14, g: ['#E6F6FF', '#C9E9FF'] },
   { t: 'Monitor 24"', e: '🖥️', km: '0,8', m: 3, g: ['#FFF1E6', '#FFDCC2'] },
@@ -69,6 +70,8 @@ const ITEMS = [
   { t: 'Sluchátka', e: '🎧', km: '2,9', m: 12, g: ['#EEE8FF', '#DCCFFF'] },
   { t: 'Sada hrnků', e: '🍵', km: '0,6', m: 2, g: ['#E6FAF6', '#C4EFE6'] },
 ];
+
+const ITEMS = ITEMS_RAW.map((it) => ({ ...it, demo: true, contact: DEMO_CONTACT, d: 'Ve velmi dobrém stavu, vyzvednutí po domluvě.', chip: 'U dveří' }));
 
 const CATEGORIES = [
   ['🛋️', 'Nábytek'], ['📱', 'Elektronika'], ['👕', 'Oblečení'], ['🧸', 'Pro děti'],
@@ -84,6 +87,36 @@ const PINS = [
   { latitude: 50.0828, longitude: 14.4638 },
   { latitude: 50.0965, longitude: 14.3955 },
 ];
+
+const CONTACTS = [
+  { id: 'whatsapp', label: 'WhatsApp', e: '💬', color: '#25D366', field: 'phone' },
+  { id: 'messenger', label: 'Messenger', e: '⚡', color: '#0084FF', field: 'messenger' },
+  { id: 'phone', label: 'Zavolat', e: '📞', color: '#34C759', field: 'phone' },
+  { id: 'sms', label: 'SMS', e: '✉️', color: '#FF9500', field: 'phone' },
+  { id: 'email', label: 'E-mail', e: '📧', color: '#5E5CE6', field: 'email' },
+];
+
+const DEMO_CONTACT = { methods: ['whatsapp', 'phone'], phone: '', messenger: '', email: '' };
+
+function openContact(method, item) {
+  const c = item.contact || {};
+  if (item.demo) {
+    Alert.alert('Ukázkový inzerát', 'Tohle je jen ukázka – kontakt není skutečný. Přidej vlastní věc a vyzkoušej si to na ní.');
+    return;
+  }
+  const msg = `Ahoj, mám zájem o „${item.t}“ z TAKE.IT. Je to ještě k dispozici? 🙂`;
+  const enc = encodeURIComponent(msg);
+  const digits = (c.phone || '').replace(/[^0-9+]/g, '');
+  const wa = digits.replace(/^\+/, '');
+  let url = null;
+  if (method === 'whatsapp') url = `https://wa.me/${wa}?text=${enc}`;
+  if (method === 'messenger') url = `https://m.me/${(c.messenger || '').trim().replace(/^@/, '')}`;
+  if (method === 'phone') url = `tel:${digits}`;
+  if (method === 'sms') url = Platform.OS === 'ios' ? `sms:${digits}&body=${enc}` : `sms:${digits}?body=${enc}`;
+  if (method === 'email') url = `mailto:${(c.email || '').trim()}?subject=${encodeURIComponent('TAKE.IT – ' + item.t)}&body=${enc}`;
+  if (!url) return;
+  Linking.openURL(url).catch(() => Alert.alert('Nejde otevřít', 'Tuhle appku nemáš v telefonu nainstalovanou.'));
+}
 
 // ---------- UI základ ----------
 function Logo({ size = 40, color = B }) {
@@ -698,6 +731,10 @@ function FirstItem({ next, ctx }) {
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [chip, setChip] = useState('U dveří');
+  const [methods, setMethods] = useState(['whatsapp']);
+  const [phone, setPhone] = useState('+420 ');
+  const [messenger, setMessenger] = useState('');
+  const [email, setEmail] = useState('');
   const pick = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
@@ -711,6 +748,14 @@ function FirstItem({ next, ctx }) {
       Alert.alert('Fotky', 'Nepodařilo se otevřít galerii.');
     }
   };
+  const toggle = (id) => setMethods(methods.includes(id) ? methods.filter((m) => m !== id) : [...methods, id]);
+  const needPhone = methods.some((m) => ['whatsapp', 'phone', 'sms'].includes(m));
+  const needMessenger = methods.includes('messenger');
+  const needEmail = methods.includes('email');
+  const phoneOk = !needPhone || phone.replace(/[^0-9]/g, '').length >= 9;
+  const messengerOk = !needMessenger || messenger.trim().length >= 2;
+  const emailOk = !needEmail || /.+@.+\..+/.test(email.trim());
+  const valid = title.trim() && methods.length > 0 && phoneOk && messengerOk && emailOk;
   const chips = [['🚪', 'U dveří'], ['🕒', 'Kdykoli dnes'], ['📦', 'Před domem']];
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -748,7 +793,8 @@ function FirstItem({ next, ctx }) {
           style={[st.input, { height: 100, textAlignVertical: 'top' }]}
           multiline
         />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }}>
+        <Text style={st.section}>Vyzvednutí</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {chips.map(([e, l]) => (
             <Pressable
               key={l}
@@ -762,6 +808,72 @@ function FirstItem({ next, ctx }) {
             </Pressable>
           ))}
         </View>
+
+        <Text style={st.section}>Jak tě můžou kontaktovat?</Text>
+        <Text style={st.chartAxis}>Vyber jednu nebo víc možností.</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
+          {CONTACTS.map((c) => {
+            const on = methods.includes(c.id);
+            return (
+              <Pressable
+                key={c.id}
+                onPress={() => {
+                  tap();
+                  toggle(c.id);
+                }}
+                style={[st.contactTile, on && { borderColor: c.color, backgroundColor: c.color + '14' }]}
+              >
+                <Text style={{ fontSize: 26 }}>{c.e}</Text>
+                <Text style={[st.contactTxt, on && { color: INK }]}>{c.label}</Text>
+                {on ? (
+                  <View style={[st.contactCheck, { backgroundColor: c.color }]}>
+                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>✓</Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+        {needPhone ? (
+          <FadeIn>
+            <TextInput
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="Telefonní číslo"
+              placeholderTextColor="#B5B5BA"
+              keyboardType="phone-pad"
+              style={[st.input, !phoneOk && phone.length > 5 && st.inputErr]}
+            />
+          </FadeIn>
+        ) : null}
+        {needMessenger ? (
+          <FadeIn>
+            <TextInput
+              value={messenger}
+              onChangeText={setMessenger}
+              placeholder="Uživatelské jméno na Facebooku (m.me/…)"
+              placeholderTextColor="#B5B5BA"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={st.input}
+            />
+          </FadeIn>
+        ) : null}
+        {needEmail ? (
+          <FadeIn>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="E-mail"
+              placeholderTextColor="#B5B5BA"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[st.input, !emailOk && email.length > 3 && st.inputErr]}
+            />
+          </FadeIn>
+        ) : null}
+        <Text style={[st.chartAxis, { marginTop: 10 }]}>🔒 Kontakt uvidí jen lidé, kteří o věc projeví zájem.</Text>
       </ScrollView>
       <View style={{ paddingHorizontal: 24 }}>
         <Pressable onPress={next} hitSlop={10}>
@@ -769,15 +881,72 @@ function FirstItem({ next, ctx }) {
         </Pressable>
         <Button
           title="Zveřejnit"
-          disabled={!title.trim()}
+          disabled={!valid}
           onPress={() => {
-            ctx.set('item', { t: title.trim(), d: desc, uri: photos[0], chip, e: '🎁', km: '0', m: 0, g: [B_LIGHT, '#DCCFFF'] });
+            ctx.set('item', {
+              t: title.trim(),
+              d: desc.trim(),
+              uri: photos[0],
+              chip,
+              e: '🎁',
+              km: '0',
+              m: 0,
+              g: [B_LIGHT, '#DCCFFF'],
+              contact: { methods, phone: phone.trim(), messenger: messenger.trim(), email: email.trim() },
+            });
             success();
             next();
           }}
         />
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+function ItemDetail({ item, onClose }) {
+  if (!item) return null;
+  const methods = (item.contact && item.contact.methods) || [];
+  return (
+    <Modal visible={!!item} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: '#fff' }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
+          <LinearGradient colors={item.g} style={{ height: 320, alignItems: 'center', justifyContent: 'center' }}>
+            {item.uri ? <Image source={{ uri: item.uri }} style={StyleSheet.absoluteFill} /> : <Text style={{ fontSize: 120 }}>{item.e}</Text>}
+            <Pressable onPress={onClose} hitSlop={12} style={st.closeBtn}>
+              <Text style={{ fontSize: 22, color: INK }}>✕</Text>
+            </Pressable>
+          </LinearGradient>
+          <View style={{ padding: 24 }}>
+            <Text style={st.h1}>{item.t}</Text>
+            <Text style={{ color: GREEN, fontWeight: '900', fontSize: 22, marginTop: 6 }}>Zdarma</Text>
+            <Text style={[st.sub, { marginTop: 10 }]}>📍 {item.km === '0' ? 'Praha • právě teď' : `${item.km} km • před ${item.m} min`}</Text>
+            {item.chip ? <Text style={st.sub}>🚪 Vyzvednutí: {item.chip}</Text> : null}
+            {item.d ? <Text style={[st.body, { marginTop: 16 }]}>{item.d}</Text> : null}
+            <Text style={[st.section, { marginTop: 26 }]}>Kontaktuj dárce</Text>
+            {methods.length === 0 ? <Text style={st.chartAxis}>Dárce nezadal kontakt.</Text> : null}
+            {CONTACTS.filter((c) => methods.includes(c.id)).map((c, i) => (
+              <FadeIn key={c.id} delay={i * 60}>
+                <Pressable
+                  onPress={() => {
+                    tap();
+                    openContact(c.id, item);
+                  }}
+                  style={({ pressed }) => [st.contactBtn, { backgroundColor: c.color }, pressed && { opacity: 0.85 }]}
+                >
+                  <Text style={{ fontSize: 20 }}>{c.e}</Text>
+                  <Text style={st.contactBtnTxt}>
+                    {c.id === 'phone' ? 'Zavolat' : c.id === 'email' ? 'Napsat e-mail' : `Napsat přes ${c.label}`}
+                  </Text>
+                </Pressable>
+              </FadeIn>
+            ))}
+            <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 12 }]}>
+              Zpráva se předvyplní – stačí ji odeslat.
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
   );
 }
 
@@ -804,6 +973,11 @@ function Given({ ctx, onBrowse, onRestart }) {
               <Text style={st.itemTitle}>{item.t}</Text>
               <Text style={{ color: GREEN, fontWeight: '800', marginTop: 4 }}>Zdarma</Text>
               <Text style={st.itemMeta}>Praha • právě teď • {item.chip}</Text>
+              {item.contact ? (
+                <Text style={st.itemMeta}>
+                  Kontakt: {CONTACTS.filter((c) => item.contact.methods.includes(c.id)).map((c) => c.e).join(' ')}
+                </Text>
+              ) : null}
             </View>
           </FadeIn>
         ) : null}
@@ -1088,6 +1262,7 @@ const TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, Noti
 // ---------- Hlavní feed ----------
 function Feed({ ctx, onGive, onRestart }) {
   const items = ctx.data.item ? [ctx.data.item, ...ITEMS] : ITEMS;
+  const [open, setOpen] = useState(null);
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
       <View style={st.feedHeader}>
@@ -1101,9 +1276,13 @@ function Feed({ ctx, onGive, onRestart }) {
         <Text style={[st.chartAxis, { marginBottom: 14 }]}>Praha • do {ctx.data.km || 5} km</Text>
         <Grid
           items={items}
-          onItem={(it) => Alert.alert(it.t, 'Rezervace a chat s dárcem přijdou v další verzi 🙂')}
+          onItem={(it) => {
+            tap();
+            setOpen(it);
+          }}
         />
       </ScrollView>
+      <ItemDetail item={open} onClose={() => setOpen(null)} />
       <Pressable
         onPress={() => {
           tap();
@@ -1243,6 +1422,25 @@ const st = StyleSheet.create({
     padding: 14,
   },
   photoThumb: { width: 110, height: 110, borderRadius: 16, marginRight: 10 },
+  section: { fontSize: 20, fontWeight: '800', color: INK, marginTop: 22, marginBottom: 6 },
+  body: { fontSize: 17, lineHeight: 24, color: INK },
+  inputErr: { borderWidth: 2, borderColor: '#FF3B30' },
+  contactTile: {
+    width: (W - 48 - 20) / 3,
+    marginRight: 10,
+    marginBottom: 10,
+    paddingVertical: 14,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#ECECF0',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  contactTxt: { fontSize: 13, fontWeight: '700', color: SUB, marginTop: 6 },
+  contactCheck: { position: 'absolute', top: 6, right: 6, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  contactBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 28, marginTop: 10 },
+  contactBtnTxt: { color: '#fff', fontSize: 17, fontWeight: '800', marginLeft: 10 },
+  closeBtn: { position: 'absolute', top: 16, right: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center' },
   input: { backgroundColor: CARD, borderRadius: 18, padding: 16, fontSize: 17, color: INK, marginTop: 12 },
   chip: { paddingVertical: 11, paddingHorizontal: 15, borderRadius: 22, backgroundColor: CARD, marginRight: 8, marginTop: 8 },
   chipSel: { backgroundColor: B },
