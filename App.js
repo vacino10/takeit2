@@ -85,7 +85,8 @@ const ITEMS_RAW = [
   { t: 'Sada hrnků', e: '🍵', km: '0,6', m: 2, g: ['#E6FAF6', '#C4EFE6'] },
 ];
 
-const ITEMS = ITEMS_RAW.map((it) => ({ ...it, demo: true, contact: DEMO_CONTACT, d: 'Ve velmi dobrém stavu, vyzvednutí po domluvě.', chip: 'U dveří' }));
+const VALUES = { Pohovka: 3000, 'Dětské kolo': 1200, 'Monitor 24"': 1500, Kávovar: 800, Monstera: 400, 'Stolní lampa': 300, 'Krabice knih': 500, 'Zimní bunda': 900, Plyšáci: 300, 'Jídelní židle': 600, Sluchátka: 700, 'Sada hrnků': 200 };
+const ITEMS = ITEMS_RAW.map((it) => ({ ...it, v: VALUES[it.t] || 500, demo: true, contact: DEMO_CONTACT, d: 'Ve velmi dobrém stavu, vyzvednutí po domluvě.', chip: 'U dveří' }));
 
 const CATEGORIES = [
   ['🛋️', 'Nábytek'], ['📱', 'Elektronika'], ['👕', 'Oblečení'], ['🧸', 'Pro děti'],
@@ -1609,7 +1610,7 @@ function Paywall({ visible, onClose, onUnlock, discount = 0 }) {
     setTimeout(() => {
       setBusy(false);
       success();
-      onUnlock();
+      onUnlock(plan);
     }, 1200);
   };
   return (
@@ -1686,41 +1687,100 @@ function Paywall({ visible, onClose, onUnlock, discount = 0 }) {
   );
 }
 
+function LockedOverlay({ ctx, onUnlock, onSkip }) {
+  const sheet = useRef(new Animated.Value(0)).current;
+  const marquee = useRef(new Animated.Value(0)).current;
+  const glow = useRef(new Animated.Value(0)).current;
+  const [idx, setIdx] = useState(0);
+  const fade = useRef(new Animated.Value(1)).current;
+  const disc = discountFor(ctx.myItems.length);
+  useEffect(() => {
+    Animated.spring(sheet, { toValue: 1, friction: 8, tension: 40, delay: 500, useNativeDriver: true }).start();
+    Animated.loop(Animated.timing(marquee, { toValue: 1, duration: 9000, easing: Easing.linear, useNativeDriver: true })).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+    const t = setInterval(() => {
+      Animated.timing(fade, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+        setIdx((i) => (i + 1) % ITEMS.length);
+        Animated.timing(fade, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+      });
+    }, 2200);
+    return () => clearInterval(t);
+  }, []);
+  const it = ITEMS[idx];
+  const row = [...ITEMS, ...ITEMS];
+  const rowW = ITEMS.length * 64;
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <BlurView intensity={30} tint="light" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(112,40,232,0.18)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <Animated.View
+        style={[
+          st.sheet,
+          { transform: [{ translateY: sheet.interpolate({ inputRange: [0, 1], outputRange: [520, 0] }) }] },
+        ]}
+      >
+        <View style={st.sheetHandle} />
+        <Animated.View style={[st.liveRow, { opacity: fade }]}>
+          <View style={st.liveDot} />
+          <Text style={{ color: INK, fontWeight: '700' }} numberOfLines={1}>
+            Právě přidáno: {it.e} {it.t} • {it.km} km
+          </Text>
+        </Animated.View>
+        <Text style={[st.h1, { fontSize: 28, lineHeight: 34, textAlign: 'center', marginTop: 14 }]}>37 věcí zdarma čeká kolem tebe</Text>
+        <Text style={[st.sub, { textAlign: 'center' }]}>Nové přibývají každou hodinu. Odemkni seznam a buď u nich první.</Text>
+        <View style={{ height: 64, overflow: 'hidden', marginTop: 16, marginHorizontal: -24 }}>
+          <Animated.View
+            style={{ flexDirection: 'row', transform: [{ translateX: marquee.interpolate({ inputRange: [0, 1], outputRange: [0, -rowW] }) }] }}
+          >
+            {row.map((x, i) => (
+              <LinearGradient key={i} colors={x.g} style={st.marqueeChip}>
+                <Text style={{ fontSize: 26 }}>{x.e}</Text>
+              </LinearGradient>
+            ))}
+          </Animated.View>
+        </View>
+        {disc ? (
+          <View style={[st.discountPill, { alignSelf: 'center', marginTop: 14 }]}>
+            <Text style={{ color: '#fff', fontWeight: '800' }}>🎁 Máš slevu −{disc} % jako dárce</Text>
+          </View>
+        ) : (
+          <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 12 }]}>💡 Daruj věc a získáš slevu až −60 %</Text>
+        )}
+        <Animated.View style={{ marginTop: 16, transform: [{ scale: glow.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] }) }] }}>
+          <Button title="Odemknout seznam" onPress={onUnlock} style={{ marginBottom: 0 }} />
+        </Animated.View>
+        {onSkip ? (
+          <Pressable onPress={onSkip} hitSlop={10}>
+            <Text style={[st.secondary, { marginTop: 14, marginBottom: 0 }]}>Teď ne</Text>
+          </Pressable>
+        ) : null}
+      </Animated.View>
+    </View>
+  );
+}
+
 function LockedFeed({ next, ctx }) {
   const [pay, setPay] = useState(false);
   return (
     <View style={{ flex: 1 }}>
-      <View style={{ paddingHorizontal: 24 }}>
-        <FadeIn>
-          <Text style={st.h1}>Našli jsme 37 věcí zdarma kolem tebe</Text>
-          <Text style={st.sub}>Do {ctx.data.km || 5} km • přidáno za poslední hodinu</Text>
-        </FadeIn>
-      </View>
-      <View style={{ flex: 1, marginTop: 16, overflow: 'hidden' }}>
+      <View style={{ flex: 1, overflow: 'hidden' }}>
         <View style={{ paddingHorizontal: 24 }} pointerEvents="none">
           <Grid items={ITEMS.slice(0, 8)} />
         </View>
-        <BlurView intensity={28} tint="light" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
-        <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.95)']} style={[StyleSheet.absoluteFill, { top: '35%' }]} />
-        <View style={st.lockCard}>
-          <Text style={{ fontSize: 40 }}>🔒</Text>
-          <Text style={[st.h2, { textAlign: 'center', marginTop: 6 }]}>Odemkni všechny věci</Text>
-          <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 4 }]}>Nové věci se rozeberou rychle – buď první.</Text>
-        </View>
-      </View>
-      <View style={{ paddingHorizontal: 24 }}>
-        <Button title="Odemknout TAKE.IT" onPress={() => setPay(true)} />
-        <Pressable onPress={next} hitSlop={10}>
-          <Text style={[st.secondary, { marginTop: 8, marginBottom: 0 }]}>Teď ne</Text>
-        </Pressable>
+        <LockedOverlay ctx={ctx} onUnlock={() => setPay(true)} onSkip={next} />
       </View>
       <Paywall
         visible={pay}
         discount={discountFor(ctx.myItems.length)}
         onClose={() => setPay(false)}
-        onUnlock={() => {
+        onUnlock={(pl) => {
           setPay(false);
-          ctx.set('unlocked', true);
+          ctx.unlock(pl);
           next();
         }}
       />
@@ -1774,29 +1834,11 @@ function HomeTab({ ctx }) {
           />
         </ScrollView>
       ) : (
-        <View style={{ flex: 1 }}>
-          <View style={{ paddingHorizontal: 24 }}>
-            <Text style={[st.h2, { fontSize: 22 }]}>37 věcí zdarma kolem tebe</Text>
-            <Text style={st.chartAxis}>Do {ctx.data.km || 5} km • přidáno za poslední hodinu</Text>
+        <View style={{ flex: 1, overflow: 'hidden' }}>
+          <View style={{ paddingHorizontal: 24 }} pointerEvents="none">
+            <Grid items={ITEMS.slice(0, 8)} />
           </View>
-          <View style={{ flex: 1, marginTop: 14, overflow: 'hidden' }}>
-            <View style={{ paddingHorizontal: 24 }} pointerEvents="none">
-              <Grid items={ITEMS.slice(0, 8)} />
-            </View>
-            <BlurView intensity={28} tint="light" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
-            <View style={[st.lockCard, { top: '18%' }]}>
-              <Text style={{ fontSize: 40 }}>🔒</Text>
-              <Text style={[st.h2, { textAlign: 'center', marginTop: 6 }]}>Odemkni všechny věci</Text>
-              {disc ? (
-                <View style={[st.discountPill, { marginTop: 10 }]}>
-                  <Text style={{ color: '#fff', fontWeight: '800' }}>🎁 Máš slevu −{disc} % jako dárce</Text>
-                </View>
-              ) : (
-                <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 4 }]}>💡 Daruj věc a získáš slevu až −60 %</Text>
-              )}
-              <Button title="Odemknout" style={{ alignSelf: 'stretch', marginTop: 14, marginBottom: 0 }} onPress={() => setPay(true)} />
-            </View>
-          </View>
+          <LockedOverlay ctx={ctx} onUnlock={() => setPay(true)} />
         </View>
       )}
       <ItemDetail item={current} onClose={() => setOpen(null)} ctx={ctx} />
@@ -1804,9 +1846,9 @@ function HomeTab({ ctx }) {
         visible={pay}
         discount={disc}
         onClose={() => setPay(false)}
-        onUnlock={() => {
+        onUnlock={(pl) => {
           setPay(false);
-          ctx.set('unlocked', true);
+          ctx.unlock(pl);
         }}
       />
     </View>
@@ -1961,8 +2003,13 @@ function ActivityTab({ ctx }) {
 function ProfileTab({ ctx, onRestart }) {
   const [pay, setPay] = useState(false);
   const given = ctx.myItems.length;
-  const got = Object.values(ctx.outReq).filter((x) => x === 'accepted').length;
+  const gotItems = ITEMS.filter((x) => ctx.outReq[x.t] === 'accepted');
+  const got = gotItems.length;
+  const saved = gotItems.reduce((sum, x) => sum + x.v, 0);
   const disc = discountFor(given);
+  const plus = ctx.data.unlocked;
+  const planName = { year: 'Roční', month: 'Měsíční', week: 'Týdenní' }[ctx.data.plan] || 'Roční';
+  const renew = new Date((ctx.data.planAt || Date.now()) + ({ year: 365, month: 30, week: 7 }[ctx.data.plan] || 365) * 864e5);
   const c = ctx.data.savedContact;
   const name = ctx.data.name || '';
   return (
@@ -1980,13 +2027,18 @@ function ProfileTab({ ctx, onRestart }) {
             placeholderTextColor="#B5B5BA"
             style={[st.h1, { fontSize: 26, textAlign: 'center', marginTop: 12, minWidth: 200 }]}
           />
-          <Text style={st.chartAxis}>📍 Praha • na TAKE.IT od dneška</Text>
+          {plus ? (
+            <View style={[st.discountPill, { marginTop: 6, paddingVertical: 4 }]}>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 12 }}>✦ PLUS</Text>
+            </View>
+          ) : null}
+          <Text style={[st.chartAxis, { marginTop: 6 }]}>📍 Praha • na TAKE.IT od dneška</Text>
         </View>
         <View style={{ flexDirection: 'row', marginTop: 20 }}>
           {[
             [given, 'darováno'],
             [got, 'získáno'],
-            [`~${given * 8} kg`, 'mimo skládku'],
+            [`${kc(saved)} Kč`, 'ušetřeno'],
           ].map(([v, l]) => (
             <View key={l} style={st.statBox}>
               <Text style={[st.bigNum, { fontSize: 26 }]}>{v}</Text>
@@ -1994,17 +2046,66 @@ function ProfileTab({ ctx, onRestart }) {
             </View>
           ))}
         </View>
-        <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 6, fontSize: 12 }]}>Kila jsou orientační odhad.</Text>
+        <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 8, fontSize: 12 }]}>
+          ♻️ ~{(given + got) * 8} kg věcí mimo skládku • ušetřeno = odhad ceny z bazaru
+        </Text>
 
         <Text style={st.section}>TAKE.IT Plus</Text>
+        {plus ? (
+          <LinearGradient colors={['#7028E8', '#9B5CFF']} style={st.plusCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Logo size={24} color="#fff" />
+              <Text style={{ color: '#fff', fontWeight: '800' }}>✓ Aktivní</Text>
+            </View>
+            <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 16 }}>{planName} předplatné</Text>
+            <Text style={{ color: '#EDE5FF', marginTop: 4 }}>
+              Obnovení {renew.getDate()}. {renew.getMonth() + 1}. {renew.getFullYear()}
+              {disc ? ` • sleva pro dárce −${disc} %` : ''}
+            </Text>
+            <View style={st.plusStat}>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>Díky Plus jsi ušetřil</Text>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 28 }}>{kc(saved)} Kč</Text>
+            </View>
+            <Pressable
+              onPress={() => Alert.alert('Předplatné', 'V ostré verzi se tady otevře správa předplatného v App Store.')}
+              hitSlop={8}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center', marginTop: 14, textDecorationLine: 'underline' }}>
+                Spravovat předplatné
+              </Text>
+            </Pressable>
+          </LinearGradient>
+        ) : null}
+        {gotItems.length ? (
+          <>
+            <Text style={st.section}>Získané věci</Text>
+            {gotItems.map((x) => (
+              <View key={x.t} style={[st.reqCard, { flexDirection: 'row', alignItems: 'center' }]}>
+                <LinearGradient colors={x.g} style={[st.avatar, { borderRadius: 14 }]}>
+                  <Text style={{ fontSize: 24 }}>{x.e}</Text>
+                </LinearGradient>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={st.h2}>{x.t}</Text>
+                  <Text style={st.chartAxis}>od souseda • {x.km} km</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[st.strike, { marginRight: 0 }]}>{kc(x.v)} Kč</Text>
+                  <Text style={st.zero}>0 Kč</Text>
+                </View>
+              </View>
+            ))}
+          </>
+        ) : null}
+        {plus ? null : (
         <View style={st.chartCard}>
           <Text style={st.h2}>{ctx.data.unlocked ? '✅ Aktivní' : 'Neaktivní'}</Text>
           <Text style={st.chartAxis}>
             {disc ? `Tvoje sleva pro dárce: −${disc} %` : 'Daruj první věc a získáš −20 %'}
             {nextTier(given) ? ` • další stupeň za ${nextTier(given).n - given} ${nextTier(given).n - given === 1 ? 'věc' : 'věci'}` : ''}
           </Text>
-          {!ctx.data.unlocked ? <Button title="Aktivovat" style={{ marginTop: 12, marginBottom: 0 }} onPress={() => setPay(true)} /> : null}
+          <Button title="Aktivovat" style={{ marginTop: 12, marginBottom: 0 }} onPress={() => setPay(true)} />
         </View>
+        )}
 
         <Text style={st.section}>Kontakt pro zájemce</Text>
         <View style={st.chartCard}>
@@ -2044,9 +2145,9 @@ function ProfileTab({ ctx, onRestart }) {
         visible={pay}
         discount={disc}
         onClose={() => setPay(false)}
-        onUnlock={() => {
+        onUnlock={(pl) => {
           setPay(false);
-          ctx.set('unlocked', true);
+          ctx.unlock(pl);
         }}
       />
     </View>
@@ -2213,6 +2314,11 @@ function Root() {
       setMyItems((xs) => xs.map((x) => (x.id === r.itemId ? { ...x, status: 'reserved' } : x)));
       success();
       setToast({ title: 'Potvrzeno 🎉', body: `${r.from} dostal upozornění a tvůj kontakt. Po předání označ věc jako předanou.` });
+    },
+    unlock: (pl) => {
+      setData((d) => ({ ...d, unlocked: true, plan: pl || 'year', planAt: Date.now() }));
+      success();
+      setTimeout(() => setToast({ title: 'Vítej v TAKE.IT Plus 💜', body: 'Seznam je odemčený. Klepni na věc a dej „Mám zájem“.' }), 600);
     },
     decline: (rid) => setRequests((rs) => rs.map((x) => (x.id === rid ? { ...x, status: 'declined' } : x))),
     markGiven: (id) => {
@@ -2400,6 +2506,29 @@ const st = StyleSheet.create({
     padding: 14,
   },
   photoThumb: { width: 110, height: 110, borderRadius: 16, marginRight: 10 },
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    paddingBottom: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 16,
+  },
+  sheetHandle: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: '#E0E0E5', marginBottom: 14 },
+  liveRow: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', backgroundColor: CARD, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: GREEN, marginRight: 8 },
+  marqueeChip: { width: 54, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  plusCard: { borderRadius: 24, padding: 20 },
+  plusStat: { backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 16, padding: 14, marginTop: 16 },
   perkLine: { position: 'absolute', left: 45, right: 45, top: 24, height: 4, borderRadius: 2, backgroundColor: '#E5E5EA' },
   perkDot: { width: 52, height: 52, borderRadius: 26, borderWidth: 3, borderColor: '#E5E5EA', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   discountPill: { backgroundColor: B, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8 },
