@@ -59,7 +59,8 @@ try {
 
 setupURLPolyfill();
 const SUPABASE_URL = 'https://zkhezjbvmefyqfcuytjz.supabase.co';
-let supabase = null; // vytvoří se po vložení klíče (KeySetup)
+const DEFAULT_KEY = 'sb_publishable_n2Xnv9QOjMrtOhtXwhfhCg_y_jUvyX9';
+let supabase = null;
 const initSupabase = (key) => {
   supabase = createClient(SUPABASE_URL, key, {
     auth: { storage: AsyncStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
@@ -3340,8 +3341,8 @@ export default function App() {
   const [ready, setReady] = useState(null);
   useEffect(() => {
     AsyncStorage.getItem('sb_key').then((k) => {
-      if (k) initSupabase(k);
-      setReady(!!k);
+      initSupabase(k || DEFAULT_KEY);
+      setReady(true);
     });
   }, []);
   return (
