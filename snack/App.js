@@ -1049,10 +1049,15 @@ var GiveSavings = function GiveSavings({ next }) {
   const h1 = useRef(new Animated.Value(0)).current;
   const h2 = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.stagger(300, [
-      Animated.spring(h1, { toValue: 230, friction: 7, useNativeDriver: false }),
-      Animated.spring(h2, { toValue: 34, friction: 6, useNativeDriver: false }),
+    const stop = rumble(2100, { delay: 300 });
+    Animated.sequence([
+      Animated.delay(300),
+      Animated.stagger(700, [
+        Animated.timing(h1, { toValue: 230, duration: 1600, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(h2, { toValue: 34, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      ]),
     ]).start(() => success());
+    return stop;
   }, []);
   return (
     <StepLayout
@@ -1146,7 +1151,7 @@ var WasteAnim = function WasteAnim() {
     Animated.loop(Animated.timing(spin, { toValue: 1, duration: 4000, easing: Easing.linear, useNativeDriver: true })).start();
     Animated.sequence([
       Animated.delay(500),
-      Animated.stagger(300, anims.map((a) => Animated.spring(a, { toValue: 1, friction: 7, useNativeDriver: false }))),
+      Animated.stagger(550, anims.map((a) => Animated.timing(a, { toValue: 1, duration: 1300, easing: Easing.out(Easing.cubic), useNativeDriver: false }))),
     ]).start(() => success());
   }, []);
   return (
@@ -1201,7 +1206,7 @@ var NeighborsAnim = function NeighborsAnim() {
         Animated.timing(pulse, { toValue: 0, duration: 700, useNativeDriver: true }),
       ])
     ).start();
-    Animated.stagger(180, pops.map((a) => Animated.spring(a, { toValue: 1, friction: 5, useNativeDriver: true }))).start(() => success());
+    Animated.stagger(380, pops.map((a) => Animated.spring(a, { toValue: 1, friction: 7, tension: 30, useNativeDriver: true }))).start(() => success());
     hearts.forEach((h, i) =>
       Animated.loop(
         Animated.sequence([
@@ -1391,7 +1396,7 @@ var PinBubble = function PinBubble() {
 var PopIn = function PopIn({ children, delay = 0 }) {
   const a = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.spring(a, { toValue: 1, friction: 4, tension: 120, delay, useNativeDriver: true }).start();
+    Animated.spring(a, { toValue: 1, friction: 6, tension: 40, delay, useNativeDriver: true }).start();
   }, []);
   return <Animated.View style={{ transform: [{ scale: a }] }}>{children}</Animated.View>;
 }
@@ -1401,11 +1406,11 @@ var GiveSpeed = function GiveSpeed({ next }) {
   const a = useRef(new Animated.Value(0)).current;
   const b = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const stop1 = rumble(1500, { end: 'success' });
+    const stop1 = rumble(2300, { end: 'success' });
     const stop2 = () => {};
-    Animated.stagger(550, [
-      Animated.timing(a, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-      Animated.timing(b, { toValue: 1, duration: 950, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    Animated.stagger(800, [
+      Animated.timing(a, { toValue: 1, duration: 2000, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(b, { toValue: 1, duration: 1500, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
     ]).start();
     return () => {
       stop1();
@@ -1907,8 +1912,8 @@ var TakeSavings = function TakeSavings({ next }) {
     const a = new Animated.Value(0);
     const id = a.addListener(({ value }) => setTotal(Math.round(value / 10) * 10));
     const stops = [];
-    stops.push(rumble(2200, { delay: rows.length * 420 + 400, end: 'success' }));
-    Animated.timing(a, { toValue: sum, duration: 2200, delay: rows.length * 420 + 400, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    stops.push(rumble(2800, { delay: rows.length * 420 + 400, end: 'success' }));
+    Animated.timing(a, { toValue: sum, duration: 2800, delay: rows.length * 420 + 400, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
     return () => {
       a.removeListener(id);
       stops.forEach((f) => f());
@@ -1938,11 +1943,11 @@ var TakeCompare = function TakeCompare({ next }) {
   const a = useRef(new Animated.Value(0)).current;
   const b = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const stop1 = rumble(1500, { end: 'success' });
+    const stop1 = rumble(2300, { end: 'success' });
     const stop2 = () => {};
-    Animated.stagger(550, [
-      Animated.timing(a, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-      Animated.timing(b, { toValue: 1, duration: 950, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    Animated.stagger(800, [
+      Animated.timing(a, { toValue: 1, duration: 2000, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(b, { toValue: 1, duration: 1500, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
     ]).start();
     return () => {
       stop1();
@@ -2282,7 +2287,7 @@ var CountUp = function CountUp({ to, delay = 0 }) {
     if (!to) return;
     const a = new Animated.Value(0);
     const id = a.addListener(({ value }) => setV(Math.round(value)));
-    Animated.timing(a, { toValue: to, duration: 1800, delay, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    Animated.timing(a, { toValue: to, duration: 2400, delay, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
     return () => a.removeListener(id);
   }, [to]);
   return <Text style={[st.bigNum, { fontSize: 40 }]}>{kc(v)}</Text>;
