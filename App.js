@@ -2217,6 +2217,14 @@ function Paywall({ visible, onClose, onUnlock, discount = 0 }) {
   );
 }
 
+function LockedGrid() {
+  return (
+    <View style={Platform.OS === 'web' ? { filter: 'blur(14px)', transform: [{ scale: 1.04 }] } : { opacity: 0.9 }}>
+      <Grid items={ITEMS.slice(0, 8)} />
+    </View>
+  );
+}
+
 function Spark({ x, y, size, delay, dur, drift }) {
   const a = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -2238,6 +2246,8 @@ function Spark({ x, y, size, delay, dur, drift }) {
         height: size,
         borderRadius: size / 2,
         backgroundColor: '#fff',
+        borderWidth: 0.5,
+        borderColor: 'rgba(112,40,232,0.25)',
         shadowColor: '#fff',
         shadowOpacity: 1,
         shadowRadius: 3,
@@ -2303,7 +2313,10 @@ function LockedOverlay({ ctx, onUnlock, onSkip }) {
   const rowW = ITEMS.length * 64;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <BlurView intensity={30} tint="light" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
+      {Platform.OS !== 'web' ? (
+        <BlurView intensity={60} tint="light" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
+      ) : null}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.35)' }]} />
       <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(112,40,232,0.18)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
       <Sparkles />
       <Animated.View
@@ -2358,7 +2371,7 @@ function LockedFeed({ next, ctx }) {
     <View style={{ flex: 1 }}>
       <View style={{ flex: 1, overflow: 'hidden' }}>
         <View style={{ paddingHorizontal: 24 }} pointerEvents="none">
-          <Grid items={ITEMS.slice(0, 8)} />
+          <LockedGrid />
         </View>
         <LockedOverlay ctx={ctx} onUnlock={() => setPay(true)} onSkip={next} />
       </View>
@@ -2554,7 +2567,7 @@ function HomeTab({ ctx }) {
       ) : (
         <View style={{ flex: 1, overflow: 'hidden' }}>
           <View style={{ paddingHorizontal: 24 }} pointerEvents="none">
-            <Grid items={ITEMS.slice(0, 8)} />
+            <LockedGrid />
           </View>
           <LockedOverlay ctx={ctx} onUnlock={() => setPay(true)} />
         </View>
