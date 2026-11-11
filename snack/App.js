@@ -1,4 +1,4 @@
-// TAKE.it – Pošli to dál.
+// givo – Pošli radost dál.
 var __d = function (m) { return m && m.__esModule && 'default' in m ? m.default : m; };
 // Verze pro Expo Snack (vše v jednom souboru)
 var { setupURLPolyfill } = require('react-native-url-polyfill');
@@ -51,9 +51,9 @@ var initSupabase = (key) => {
 var isConfigured = true;
 
 // Doplň před odesláním do App Store
-var SUPPORT_EMAIL = 'podpora@takeit.cz';
-var TERMS_URL = 'https://takeit.cz/podminky';
-var PRIVACY_URL = 'https://takeit.cz/soukromi';
+var SUPPORT_EMAIL = 'podpora@givo.cz';
+var TERMS_URL = 'https://givo.cz/podminky';
+var PRIVACY_URL = 'https://givo.cz/soukromi';
 
 
 // ---------- Přihlášení (Apple, zdarma) ----------
@@ -448,7 +448,7 @@ var isFbLink = (raw) => /(facebook\.com|fb\.com|m\.me|messenger\.com)\/[^\s]+/i.
 
 var openContact = function openContact(method, item, c) {
   if (!c) return;
-  const msg = `Ahoj, mám zájem o „${item.t}“ z TAKE.it. Je to ještě k dispozici? 🙂`;
+  const msg = `Ahoj, mám zájem o „${item.t}“ z Giva. Je to ještě k dispozici? 🙂`;
   const enc = encodeURIComponent(msg);
   const digits = (c.phone || '').replace(/[^0-9+]/g, '');
   const wa = digits.replace(/^\+/, '');
@@ -506,10 +506,10 @@ var mapItem = function mapItem(r, myId) {
 
 // ---------- UI základ ----------
 var LOGO_IMG = { uri: 'https://raw.githubusercontent.com/vacino10/takeit2/main/assets/logo-wordmark.png' };
-var LOGO_RATIO = 3.6255;
+var LOGO_RATIO = 2.0163;
 var Logo = function Logo({ size = 40, color = B }) {
-  const h = size * 0.82;
-  return <Image source={LOGO_IMG} style={{ height: h, width: h * LOGO_RATIO, tintColor: color }} resizeMode="contain" accessibilityLabel="TAKE.it" />;
+  const h = size * 1.25;
+  return <Image source={LOGO_IMG} style={{ height: h, width: h * LOGO_RATIO, tintColor: color }} resizeMode="contain" accessibilityLabel="givo" />;
 }
 
 var AppIcon = function AppIcon({ size = 120 }) {
@@ -529,31 +529,7 @@ var AppIcon = function AppIcon({ size = 120 }) {
         elevation: 10,
       }}
     >
-      <View
-        style={{
-          width: size * 0.32,
-          height: size * 0.18,
-          borderWidth: size * 0.055,
-          borderBottomWidth: 0,
-          borderColor: '#fff',
-          borderTopLeftRadius: size * 0.2,
-          borderTopRightRadius: size * 0.2,
-        }}
-      />
-      <View
-        style={{
-          width: size * 0.64,
-          height: size * 0.4,
-          backgroundColor: '#fff',
-          borderRadius: size * 0.06,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={{ color: B, fontWeight: '900', fontStyle: 'italic', fontSize: size * 0.13 }}>
-          TAKE.IT
-        </Text>
-      </View>
+      <Image source={LOGO_IMG} style={{ width: size * 0.72, height: (size * 0.72) / LOGO_RATIO, tintColor: '#fff', marginTop: size * 0.03 }} resizeMode="contain" />
     </View>
   );
 }
@@ -1161,7 +1137,8 @@ var Welcome = function Welcome({ onStart }) {
           <SpeechBubble text="Ahoj, já jsem Taki! 👋 Provedu tě appkou." style={{ flex: 1, marginLeft: 6 }} />
         </FadeIn>
         <FadeIn delay={600} style={{ alignItems: 'center' }}>
-          <Logo size={40} />
+          <Logo size={48} />
+          <Text style={{ color: B, fontWeight: '800', fontSize: 17, marginTop: 6 }}>Pošli radost dál.</Text>
           <Text style={[st.h1, { textAlign: 'center', marginTop: 14, fontSize: 30 }]}>Věci zdarma od sousedů</Text>
           <Text style={[st.sub, { textAlign: 'center' }]}>Najdi, co potřebuješ, a pošli dál, co už nepotřebuješ. Za minutu je hotovo – a na konci tě čeká dárek 🎁</Text>
         </FadeIn>
@@ -1195,7 +1172,7 @@ var Intro = function Intro({ onPick }) {
           </FadeIn>
           <Taki size={150} wave={!sel} mood={sel ? 'excited' : 'happy'} jump={sel ? (sel === 'give' ? 1 : 2) : 0} />
           <FadeIn delay={150} style={{ alignItems: 'center', marginTop: 24 }}>
-            <Text style={[st.h1, { textAlign: 'center' }]}>Co tě přivádí do TAKE.it?</Text>
+            <Text style={[st.h1, { textAlign: 'center' }]}>Co tě přivádí do Giva?</Text>
             <Text style={[st.sub, { textAlign: 'center' }]}>Vyber jednu možnost – appku ti nastavíme na míru.</Text>
           </FadeIn>
         </View>
@@ -1262,12 +1239,12 @@ var GiveSavings = function GiveSavings({ next }) {
           </View>
           <View style={st.barLabelBox}>
             <Text style={[st.barValue, { color: B }]}>0 Kč</Text>
-            <Text style={st.barLabel}>Na TAKE.IT</Text>
+            <Text style={st.barLabel}>Na Givu</Text>
           </View>
         </View>
         <FadeIn delay={900}>
           <Text style={[st.sub, { textAlign: 'center', marginTop: 28 }]}>
-            Na TAKE.IT si to soused odnese sám – a ty nezaplatíš nic.
+            Na Givu si to soused odnese sám – a ty nezaplatíš nic.
           </Text>
         </FadeIn>
       </View>
@@ -1470,7 +1447,7 @@ var REASON_SCREENS = {
   'Pomoct sousedům': {
     title: 'Udělej radost sousedům',
     sub: 'Tvoje nepotřebná věc může někomu kousek od tebe hodně pomoct.',
-    foot: 'Na TAKE.IT darují sousedé sousedům. 💜',
+    foot: 'Na Givu darují sousedé sousedům. 💜',
     Anim: NeighborsAnim,
   },
 };
@@ -1569,7 +1546,7 @@ var GivePickup = function GivePickup({ next, ctx }) {
 var PinBubble = function PinBubble() {
   return (
     <View style={st.pin}>
-      <Text style={st.pinTxt}>TAKE.IT</Text>
+      <Text style={st.pinTxt}>givo</Text>
     </View>
   );
 }
@@ -1610,7 +1587,7 @@ var GiveSpeed = function GiveSpeed({ next }) {
           <Animated.View style={[st.hBar, { backgroundColor: '#2A2A2A', width: a.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
         </View>
         <Text style={st.chartAxis}>Naložit → odvézt → vyložit → zpátky domů</Text>
-        <Text style={[st.chartL, { color: B, marginTop: 22 }]}>TAKE.IT</Text>
+        <Text style={[st.chartL, { color: B, marginTop: 22 }]}>Givo</Text>
         <View style={st.hTrack}>
           <Animated.View style={[st.hBar, { backgroundColor: B, width: b.interpolate({ inputRange: [0, 1], outputRange: ['0%', '18%'] }) }]} />
         </View>
@@ -1651,7 +1628,7 @@ var NotifCard = function NotifCard({ msg, depth }) {
       <AppIcon size={44} />
       <View style={{ flex: 1, marginLeft: 12 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text style={{ fontWeight: '700', color: SUB }}>TAKE.IT</Text>
+          <Text style={{ fontWeight: '700', color: SUB }}>givo</Text>
           <Text style={{ color: SUB }}>{depth === 0 ? 'teď' : `před ${depth} min`}</Text>
         </View>
         <Text style={{ fontSize: 15, color: INK, marginTop: 2 }} numberOfLines={2}>{msg}</Text>
@@ -1930,12 +1907,12 @@ var GiftStep = function GiftStep({ next, ctx }) {
   const rewards = [
     ['🌱', 'Odznak Nováček', 'Za to, že jsi s námi od začátku'],
     ['⭐', '+100 bodů dobra', 'Připíšeme ti je po prvním přihlášení'],
-    ['🎁', 'Darování navždy zdarma', 'Na TAKE.it nikdy neplatíš za to, že pomáháš'],
+    ['🎁', 'Darování navždy zdarma', 'Na Givu nikdy neplatíš za to, že pomáháš'],
   ];
   return (
     <StepLayout
       title={open ? 'Tvůj dárek za stažení 🎉' : 'Máme pro tebe dárek'}
-      subtitle={open ? 'Díky, že jsi tady. Tohle všechno je tvoje:' : 'Díky, že sis TAKE.it stáhl. Ťukni 3× na dárek a otevři ho.'}
+      subtitle={open ? 'Díky, že jsi tady. Tohle všechno je tvoje:' : 'Díky, že sis Givo stáhl. Ťukni 3× na dárek a otevři ho.'}
       cta={open ? 'Super, pokračovat' : null}
       onNext={next}
     >
@@ -2143,7 +2120,7 @@ var TakeCompare = function TakeCompare({ next }) {
           <Animated.View style={[st.hBar, { backgroundColor: '#2A2A2A', width: a.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
         </View>
         <Text style={st.chartAxis}>Fotky → smlouvání → platba → balení → čekání</Text>
-        <Text style={[st.chartL, { color: B, marginTop: 22 }]}>TAKE.IT</Text>
+        <Text style={[st.chartL, { color: B, marginTop: 22 }]}>Givo</Text>
         <View style={st.hTrack}>
           <Animated.View style={[st.hBar, { backgroundColor: B, width: b.interpolate({ inputRange: [0, 1], outputRange: ['0%', '26%'] }) }]} />
         </View>
@@ -2493,7 +2470,7 @@ var CommunityStep = function CommunityStep({ next }) {
   return (
     <StepLayout
       title={early ? 'Buď mezi prvními sousedy' : 'Přidej se k sousedům'}
-      subtitle="TAKE.it právě startuje v Česku a na Slovensku. Každá darovaná věc se tu počítá."
+      subtitle="Givo právě startuje v Česku a na Slovensku. Každá darovaná věc se tu počítá."
       onNext={next}
     >
       <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -2502,7 +2479,7 @@ var CommunityStep = function CommunityStep({ next }) {
             {[
               [stats.items, 'věcí přidáno', '📦'],
               [stats.given, 'věcí předáno', '🤝'],
-              [stats.people, 'lidí v TAKE.it', '💜'],
+              [stats.people, 'lidí v Givu', '💜'],
             ].map(([n, l, e], i) => (
               <FadeIn key={l} delay={150 + i * 150} style={[st.statBox, { flexBasis: i === 2 ? '100%' : '47%', flexGrow: 0, marginHorizontal: 0, marginBottom: 12, paddingVertical: 18 }]}>
                 <Text style={{ fontSize: 26 }}>{e}</Text>
@@ -2825,7 +2802,7 @@ var ItemDetail = function ItemDetail({ item, onClose, ctx }) {
   const methods = (contact && contact.methods) || [];
   const lat = item.lat || CENTER.latitude;
   const lng = item.lng || CENTER.longitude;
-  const share = () => Share.share({ message: `Na TAKE.it je zdarma „${item.t}“. Mrkni do appky!` }).catch(() => {});
+  const share = () => Share.share({ message: `Na Givu je zdarma „${item.t}“. Mrkni do appky!` }).catch(() => {});
   const more = () => {
     if (own) return;
     Alert.alert(item.t, null, [
@@ -2962,7 +2939,7 @@ var ItemDetail = function ItemDetail({ item, onClose, ctx }) {
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={st.h2}>{own ? 'Tvoje věc' : item.owner_name}</Text>
-                <Text style={st.chartAxis}>{own ? `${item.views} zobrazení` : 'Daruje přes TAKE.it'}</Text>
+                <Text style={st.chartAxis}>{own ? `${item.views} zobrazení` : 'Daruje přes Givo'}</Text>
               </View>
             </View>
 
@@ -3107,7 +3084,7 @@ var HomeTab = function HomeTab({ ctx }) {
         .filter((x) => !x.own && textOk(x) && (!f.cats.length || f.cats.includes(x.cat)) && dist(x) > f.km)
         .sort((a, b) => dist(a) - dist(b))
         .slice(0, 20);
-  const invite = () => Share.share({ message: 'Dávám věci, co nepotřebuju, zadarmo sousedům přes TAKE.it. Přidej se a pošli to dál 💜' }).catch(() => {});
+  const invite = () => Share.share({ message: 'Dávám věci, co nepotřebuju, zadarmo sousedům přes Givo. Přidej se a pošli radost dál 💜' }).catch(() => {});
   const quick = ['Vše', ...CATEGORIES.map(([e, c]) => c)];
   return (
     <View style={{ flex: 1 }}>
@@ -3233,7 +3210,7 @@ var HomeTab = function HomeTab({ ctx }) {
               <Taki size={100} mood={items.length ? 'think' : 'happy'} />
               <Text style={[st.h2, { marginTop: 10, textAlign: 'center' }]}>{items.length ? 'Nic jsme nenašli' : 'Buď první v okolí'}</Text>
               <Text style={[st.chartAxis, { textAlign: 'center' }]}>
-                {items.length ? 'Zkus jiné slovo nebo uvolni filtry.' : 'TAKE.it tu teprve začíná. Tvoje první věc uvidí všichni sousedé kolem.'}
+                {items.length ? 'Zkus jiné slovo nebo uvolni filtry.' : 'Givo tu teprve začíná. Tvoje první věc uvidí všichni sousedé kolem.'}
               </Text>
               {items.length ? (
                 <Button title="Zrušit filtry" light style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={() => { setQ(''); setF({ cats: [], km: 20, sort: 'new' }); }} />
@@ -3668,7 +3645,7 @@ var SettingsLinks = function SettingsLinks({ onReplay }) {
     ...(onReplay ? [['refresh-outline', 'Projít úvod znovu', onReplay]] : []),
     ['document-text-outline', 'Podmínky použití', () => Linking.openURL(TERMS_URL)],
     ['shield-checkmark-outline', 'Ochrana soukromí', () => Linking.openURL(PRIVACY_URL)],
-    ['mail-outline', 'Napsat podpoře', () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=TAKE.it`).catch(() => Alert.alert('Podpora', SUPPORT_EMAIL))],
+    ['mail-outline', 'Napsat podpoře', () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Givo`).catch(() => Alert.alert('Podpora', SUPPORT_EMAIL))],
   ];
   return (
     <View style={[st.chartCard, { paddingVertical: 4 }]}>

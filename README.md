@@ -1,4 +1,4 @@
-# TAKE.it – Pošli to dál.
+# givo – Pošli radost dál.
 
 Mobilní appka na darování věcí zdarma (Expo / React Native + Supabase).
 
@@ -28,7 +28,7 @@ Přihlášení je přes **Apple** (zdarma, bez SMS). Prohlížet věci jde i bez
 
 ## 2. Apple
 
-1. **App Store Connect → Apps → +** → New App: název `TAKE.it`, bundle ID `cz.takeit.app` (pokud ho nevidíš, vytvoř ho v developer.apple.com → Identifiers se zaškrtnutým **Sign in with Apple**).
+1. **App Store Connect → Apps → +** → New App: název `givo`, bundle ID `cz.takeit.app` (pokud ho nevidíš, vytvoř ho v developer.apple.com → Identifiers se zaškrtnutým **Sign in with Apple**).
 2. V detailu appky (App Information) zkopíruj **Apple ID** appky (číslo) → to je `ASC_APP_ID`.
 3. **Users and Access → Integrations → App Store Connect API → +** → role **App Manager** → stáhni `.p8` soubor (jde jen jednou!), zkopíruj **Key ID** a **Issuer ID**.
 4. **Team ID** najdeš na developer.apple.com → Membership.
