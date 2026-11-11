@@ -684,7 +684,7 @@ var Slider = function Slider({ value, min, max, onChange }) {
   const last = useRef(value);
   const handle = (pageX) => {
     const { x, w } = box.current;
-    let p = (pageX - x) / w;
+    let p = (pageX - x - 18) / Math.max(1, w - 36);
     p = Math.max(0, Math.min(1, p));
     const v = Math.round(min + p * (max - min));
     if (v !== last.current) {
@@ -716,10 +716,12 @@ var Slider = function Slider({ value, min, max, onChange }) {
       {...pan.panHandlers}
       style={{ height: 48, justifyContent: 'center' }}
     >
-      <View style={{ height: 10, borderRadius: 5, backgroundColor: '#ECECF0' }}>
-        <View style={{ width: `${pct}%`, height: 10, borderRadius: 5, backgroundColor: B }} />
+      <View style={{ marginHorizontal: 18 }}>
+        <View style={{ height: 8, borderRadius: 4, backgroundColor: '#ECECF0' }}>
+          <View style={{ width: `${pct}%`, height: 8, borderRadius: 4, backgroundColor: B }} />
+        </View>
+        <View pointerEvents="none" style={[st.thumb, { left: `${pct}%`, top: -14 }]} />
       </View>
-      <View pointerEvents="none" style={[st.thumb, { left: `${pct}%` }]} />
     </View>
   );
 }
@@ -2023,7 +2025,7 @@ SetupTake.hideHeader = true;
 var Header = function Header({ title, right }) {
   return (
     <View style={st.feedHeader}>
-      {title ? <Text style={[st.h1, { fontSize: 30 }]}>{title}</Text> : <Logo size={30} />}
+      {title ? <Text style={[st.h1, { fontSize: 32 }]}>{title}</Text> : <Logo size={24} />}
       {right}
     </View>
   );
@@ -2133,7 +2135,7 @@ var FiltersSheet = function FiltersSheet({ visible, value, onClose, onApply, cou
         <ScrollView contentContainerStyle={{ padding: 24 }}>
           <Text style={st.label}>Vzdálenost</Text>
           <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-            <Text style={[st.bigNum, { fontSize: 36 }]}>do {d.km} km</Text>
+            <Text style={[st.bigNum, { fontSize: 28 }]}>do {d.km} km</Text>
           </View>
           <Slider value={d.km} min={1} max={20} onChange={(v) => setD((x) => ({ ...x, km: v }))} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -2178,7 +2180,7 @@ var FiltersSheet = function FiltersSheet({ visible, value, onClose, onApply, cou
           </View>
         </ScrollView>
         <View style={st.stickyFooter}>
-          <Button title={n ? `Zobrazit ${n} ${n === 1 ? 'věc' : n < 5 ? 'věci' : 'věcí'}` : 'Nic neodpovídá filtrům'} disabled={!n} style={{ marginBottom: 0 }} onPress={() => onApply(d)} />
+          <Button title={n ? `Zobrazit ${n} ${n === 1 ? 'věc' : n < 5 ? 'věci' : 'věcí'}` : 'Použít filtry'} style={{ marginBottom: 0 }} onPress={() => onApply(d)} />
         </View>
       </View>
     </Modal>
@@ -2216,7 +2218,7 @@ var MainApp = function MainApp({ ctx }) {
               }}
               style={st.tabAdd}
             >
-              <Ionicons name="add" size={30} color="#fff" />
+              <Ionicons name="add" size={28} color="#fff" />
             </Pressable>
           ) : (
             <Pressable
@@ -2897,6 +2899,15 @@ var HomeTab = function HomeTab({ ctx }) {
     })
     .sort((a, b) => (f.sort === 'near' ? dist(a) - dist(b) : new Date(b.created_at) - new Date(a.created_at)));
   const activeFilters = f.cats.length + (f.km < 20 ? 1 : 0) + (f.sort !== 'new' ? 1 : 0);
+  // Když v okruhu nic není, ukážeme nejbližší věci kousek dál (místo prázdné obrazovky)
+  const textOk = (x) => !q.trim() || (x.t + ' ' + (x.cat || '') + ' ' + (x.d || '')).toLowerCase().includes(q.trim().toLowerCase());
+  const farther = filtered.length
+    ? []
+    : items
+        .filter((x) => !x.own && textOk(x) && (!f.cats.length || f.cats.includes(x.cat)) && dist(x) > f.km)
+        .sort((a, b) => dist(a) - dist(b))
+        .slice(0, 20);
+  const invite = () => Share.share({ message: 'Dávám věci, co nepotřebuju, zadarmo sousedům přes TAKE.it. Přidej se a pošli to dál 💜' }).catch(() => {});
   const quick = ['Vše', ...CATEGORIES.map(([e, c]) => c)];
   return (
     <View style={{ flex: 1 }}>
@@ -3000,17 +3011,40 @@ var HomeTab = function HomeTab({ ctx }) {
         >
           {ctx.loadingFeed && !items.length ? (
             <ActivityIndicator color={B} style={{ marginTop: 40 }} />
+          ) : filtered.length === 0 && farther.length ? (
+            <>
+              <View style={st.notice}>
+                <Ionicons name="navigate-circle-outline" size={22} color={B} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={st.noticeTitle}>Do {f.km} km zatím nic</Text>
+                  <Text style={st.noticeTxt}>Tohle je nejblíž – od {Math.ceil(dist(farther[0]))} km. Až se něco objeví blíž, uvidíš to nahoře.</Text>
+                </View>
+              </View>
+              <Grid
+                items={farther}
+                onItem={(it) => {
+                  tap();
+                  setOpen(it);
+                }}
+              />
+            </>
           ) : filtered.length === 0 ? (
             <View style={{ alignItems: 'center', marginTop: 40 }}>
               <Taki size={100} mood={items.length ? 'think' : 'happy'} />
-              <Text style={[st.h2, { marginTop: 10, textAlign: 'center' }]}>{items.length ? 'Nic jsme nenašli' : 'Kolem tebe zatím nic není'}</Text>
+              <Text style={[st.h2, { marginTop: 10, textAlign: 'center' }]}>{items.length ? 'Nic jsme nenašli' : 'Buď první v okolí'}</Text>
               <Text style={[st.chartAxis, { textAlign: 'center' }]}>
-                {items.length ? 'Zkus jiné slovo nebo uvolni filtry.' : 'Buď první, kdo tu něco daruje – sousedé to uvidí.'}
+                {items.length ? 'Zkus jiné slovo nebo uvolni filtry.' : 'TAKE.it tu teprve začíná. Tvoje první věc uvidí všichni sousedé kolem.'}
               </Text>
               {items.length ? (
                 <Button title="Zrušit filtry" light style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={() => { setQ(''); setF({ cats: [], km: 20, sort: 'new' }); }} />
               ) : (
-                <Button title="Darovat věc" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={ctx.openAdd} />
+                <>
+                  <Button title="Darovat první věc" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={ctx.openAdd} />
+                  <Pressable onPress={invite} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}>
+                    <Ionicons name="share-outline" size={18} color={B} />
+                    <Text style={{ color: B, fontWeight: '700', fontSize: 16, marginLeft: 6 }}>Pozvat sousedy</Text>
+                  </Pressable>
+                </>
               )}
             </View>
           ) : (
@@ -3153,6 +3187,15 @@ var ActivityTab = function ActivityTab({ ctx }) {
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}
         refreshControl={<RefreshControl refreshing={ctx.refreshing} onRefresh={ctx.refresh} tintColor={B} />}
       >
+        {ctx.incoming.length === 0 && ctx.outgoingList.length === 0 ? (
+          <View style={{ alignItems: 'center', marginTop: 40 }}>
+            <Taki size={100} mood="think" />
+            <Text style={[st.h2, { marginTop: 10 }]}>Zatím tu je klid</Text>
+            <Text style={[st.chartAxis, { textAlign: 'center', paddingHorizontal: 12 }]}>Tady uvidíš, kdo chce tvoje věci, a jak dopadly tvoje žádosti.</Text>
+            <Button title="Projít věci v okolí" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={() => ctx.setTab('home')} />
+          </View>
+        ) : (
+        <>
         <Text style={st.section}>Žádosti o tvoje věci</Text>
         {ctx.incoming.length === 0 ? <Text style={st.chartAxis}>Zatím nikdo. Jakmile se někdo přihlásí, přijde ti upozornění.</Text> : null}
         {ctx.incoming.map((r, i) => (
@@ -3194,6 +3237,8 @@ var ActivityTab = function ActivityTab({ ctx }) {
             </Pressable>
           ) : null
         )}
+        </>
+        )}
       </ScrollView>
       <ItemDetail item={open} onClose={() => setOpen(null)} ctx={ctx} />
     </View>
@@ -3204,6 +3249,7 @@ var ActivityTab = function ActivityTab({ ctx }) {
 var ProfileTab = function ProfileTab({ ctx, onRestart }) {
   const p = ctx.profile;
   const [name, setName] = useState((p && p.name) || '');
+  const [editing, setEditing] = useState(false);
   useEffect(() => setName((p && p.name) || ''), [p && p.name]);
   if (!ctx.myId) {
     return (
@@ -3228,20 +3274,45 @@ var ProfileTab = function ProfileTab({ ctx, onRestart }) {
           <View style={st.bigAvatar}>
             <Text style={{ color: '#fff', fontSize: 40, fontWeight: '900' }}>{(name.trim()[0] || 'T').toUpperCase()}</Text>
           </View>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            onEndEditing={() => ctx.updateName(name.trim())}
-            placeholder="Tvoje jméno"
-            placeholderTextColor="#B5B5BA"
-            maxLength={40}
-            style={[st.h1, { fontSize: 26, textAlign: 'center', marginTop: 12, minWidth: 200 }]}
-          />
-          <Text style={[st.chartAxis, { marginTop: 4 }]}>Jméno uvidí sousedé u tvých věcí</Text>
+          {editing ? (
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              autoFocus
+              onEndEditing={() => {
+                setEditing(false);
+                ctx.updateName(name.trim());
+              }}
+              returnKeyType="done"
+              placeholder="Tvoje jméno"
+              placeholderTextColor="#B5B5BA"
+              maxLength={40}
+              style={[st.h1, { fontSize: 24, textAlign: 'center', marginTop: 12, minWidth: 200, borderBottomWidth: 2, borderBottomColor: B, paddingBottom: 2 }]}
+            />
+          ) : (
+            <Pressable onPress={() => setEditing(true)} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, minHeight: 44 }} accessibilityLabel="Upravit jméno">
+              <Text style={[st.h1, { fontSize: 24, color: name.trim() ? INK : B }]}>{name.trim() || 'Přidej své jméno'}</Text>
+              <Ionicons name="pencil" size={16} color={name.trim() ? SUB : B} style={{ marginLeft: 8 }} />
+            </Pressable>
+          )}
+          <Text style={[st.chartAxis, { marginTop: 0 }]}>Jméno uvidí sousedé u tvých věcí</Text>
           <View style={[st.pointsPill, { marginTop: 10 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}><Ionicons name="star" size={14} color={B} /><Text style={{ fontWeight: '900', color: B, marginLeft: 5 }}>{(p && p.points) || 0} bodů dobra</Text></View>
           </View>
         </View>
+        {given + handed + got === 0 ? (
+          <View style={[st.chartCard, { marginTop: 20, flexDirection: 'row', alignItems: 'center' }]}>
+            <Taki size={64} mood="wink" />
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={st.h2}>Tvůj první dar tě čeká</Text>
+              <Text style={st.chartAxis}>Daruj věc a získej odznak První dar.</Text>
+              <Pressable onPress={ctx.openAdd} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                <Text style={{ color: B, fontWeight: '700', fontSize: 15 }}>Darovat věc</Text>
+                <Ionicons name="chevron-forward" size={16} color={B} />
+              </Pressable>
+            </View>
+          </View>
+        ) : (
         <View style={{ flexDirection: 'row', marginTop: 20 }}>
           {[
             [given, 'darováno'],
@@ -3254,8 +3325,12 @@ var ProfileTab = function ProfileTab({ ctx, onRestart }) {
             </View>
           ))}
         </View>
+        )}
 
-        <Text style={st.section}>Odznaky</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <Text style={st.section}>Odznaky</Text>
+          <Text style={[st.chartAxis, { fontWeight: '700' }]}>{[!!(p && p.welcome_claimed), given >= 1, handed >= 1, got >= 1].filter(Boolean).length}/4</Text>
+        </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
           {[
             ['leaf', 'Nováček', !!(p && p.welcome_claimed)],
@@ -3426,7 +3501,7 @@ var Root = function Root() {
     setRefreshing(true);
     try {
       const l = loc || CENTER;
-      const jobs = [api.fetchFeed(l.latitude, l.longitude, 30).then(setFeedRows)];
+      const jobs = [api.fetchFeed(l.latitude, l.longitude, 150).then(setFeedRows)];
       if (myId) {
         jobs.push(api.getProfile(myId).then(setProfile));
         jobs.push(api.getMyContact(myId).then(setContact));
@@ -3777,6 +3852,9 @@ var st = StyleSheet.create({
   donorCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 20, padding: 14, marginTop: 14 },
   verified: { backgroundColor: B_LIGHT, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
   miniMap: { height: 150, borderRadius: 20, overflow: 'hidden' },
+  notice: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: B_LIGHT, borderRadius: 18, padding: 14, marginBottom: 14 },
+  noticeTitle: { fontSize: 16, fontWeight: '700', color: INK },
+  noticeTxt: { fontSize: 14, lineHeight: 19, color: SUB, marginTop: 2 },
   stickyFooter: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 30, borderTopWidth: 1, borderTopColor: '#EFEFF2', backgroundColor: '#fff' },
   optCheck: { position: 'absolute', right: 16, top: '50%', marginTop: 1, width: 22, height: 22, borderRadius: 11, backgroundColor: B, alignItems: 'center', justifyContent: 'center' },
   pointsPill: { backgroundColor: B_LIGHT, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
@@ -3827,21 +3905,7 @@ var st = StyleSheet.create({
   tabBar: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#EFEFF2', paddingTop: 8, paddingBottom: 4, backgroundColor: '#fff' },
   tabBtn: { flex: 1, alignItems: 'center' },
   tabTxt: { fontSize: 11, fontWeight: '700', color: SUB, marginTop: 2 },
-  tabAdd: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: B,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 6,
-    marginTop: -26,
-    shadowColor: B,
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
+  tabAdd: { width: 46, height: 46, borderRadius: 23, backgroundColor: B, alignItems: 'center', justifyContent: 'center', marginHorizontal: 10 },
   statusCard: { backgroundColor: B_LIGHT, borderRadius: 20, padding: 18, alignItems: 'center' },
   inboxHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#EFEFF2' },
   reqCard: { backgroundColor: CARD, borderRadius: 20, padding: 16, marginBottom: 12 },
@@ -3860,7 +3924,7 @@ var st = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 12,
   },
-  section: { fontSize: 20, fontWeight: '800', color: INK, marginTop: 22, marginBottom: 6 },
+  section: { fontSize: 20, fontWeight: '700', color: INK, marginTop: 28, marginBottom: 8, letterSpacing: -0.2 },
   body: { fontSize: 17, lineHeight: 24, color: INK },
   inputErr: { borderWidth: 2, borderColor: '#FF3B30' },
   contactTile: {
