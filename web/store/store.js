@@ -1,5 +1,5 @@
 // givo – generátor screenshotů pro App Store a Google Play.
-// Vše se skládá v prohlížeči (fotky z Unsplash), stáhne se jako PNG v přesném rozměru.
+// Vše se skládá v prohlížeči (fotky z Unsplash), stáhne se jako JPG v přesném rozměru (bez průhlednosti – App Store PNG s alfa kanálem odmítá).
 (() => {
   const OV = window.OVERLAYS || {};
   const U = (id, w = 900) => `https://images.unsplash.com/${id}?w=${w}&q=75&auto=format&fit=crop`;
@@ -172,7 +172,7 @@
         `<div class="frame" style="width:${pw}px;height:${L.H * scale}px">` +
         `<div class="shot${s.dark ? ' dark' : ''}" style="--u:${L.W / 100}px;width:${L.W}px;height:${L.H}px;transform:scale(${scale})">${s.html(L)}</div></div>` +
         `<div class="meta"><span>${s.id} · ${L.W}×${L.H}</span><button class="dl">Stáhnout</button></div>`;
-      cell.querySelector('.dl').onclick = () => download(cell.querySelector('.shot'), `givo-${set}-${s.id}.png`, L);
+      cell.querySelector('.dl').onclick = () => download(cell.querySelector('.shot'), `givo-${set}-${s.id}.jpg`, L);
       grid.appendChild(cell);
     });
   }
@@ -181,7 +181,7 @@
     const old = btn.textContent;
     btn.textContent = 'Generuju…';
     try {
-      const url = await htmlToImage.toPng(node, { width: L.W, height: L.H, pixelRatio: 1, style: { transform: 'none' } });
+      const url = await htmlToImage.toJpeg(node, { width: L.W, height: L.H, pixelRatio: 1, quality: 0.95, backgroundColor: '#ffffff', style: { transform: 'none' } });
       const a = document.createElement('a');
       a.href = url;
       a.download = name;
@@ -201,13 +201,50 @@
       render(b.dataset.set);
     })
   );
+  // Vše najednou jako jeden ZIP (App Store + Google Play + feature graphic + ikona 512)
+  const waitImgs = (el) => Promise.all([...el.querySelectorAll('img')].map((i) => (i.complete ? i.decode().catch(() => {}) : new Promise((r) => { i.onload = i.onerror = r; }))));
+  const offscreen = document.createElement('div');
+  offscreen.style.cssText = 'position:fixed;left:-20000px;top:0;pointer-events:none';
+  document.body.appendChild(offscreen);
   document.getElementById('all').onclick = async () => {
-    const cells = [...grid.querySelectorAll('.cell')];
-    for (const c of cells) {
-      c.querySelector('.dl').click();
-      await new Promise((r) => setTimeout(r, 1800));
+    const btn = document.getElementById('all');
+    const jobs = [
+      ...SHOTS.map((s) => ['ios', s, 'App Store (1320x2868)']),
+      ...SHOTS.map((s) => ['play', s, 'Google Play (1080x1920)']),
+      ['feature', FEATURE, 'Google Play – feature graphic (1024x500)'],
+    ];
+    const zip = new JSZip();
+    btn.disabled = true;
+    try {
+      for (let k = 0; k < jobs.length; k++) {
+        const [set, s, folder] = jobs[k];
+        const L = LAYOUT[set];
+        btn.textContent = `Generuju ${k + 1}/${jobs.length}…`;
+        offscreen.innerHTML = `<div class="shot${s.dark ? ' dark' : ''}" style="--u:${L.W / 100}px;width:${L.W}px;height:${L.H}px">${s.html(L)}</div>`;
+        const node = offscreen.firstChild;
+        await waitImgs(node);
+        const url = await htmlToImage.toJpeg(node, { width: L.W, height: L.H, pixelRatio: 1, quality: 0.95, backgroundColor: '#ffffff' });
+        zip.folder(folder).file(`givo-${s.id}.jpg`, url.split(',')[1], { base64: true });
+      }
+      const icon = await fetch('/img/icon-512.png').then((r) => r.arrayBuffer());
+      zip.folder('Google Play – ikona (512x512)').file('givo-ikona-512.png', icon);
+      btn.textContent = 'Balím ZIP…';
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'givo-screenshoty.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      btn.textContent = 'Staženo ✓';
+    } catch (e) {
+      console.error(e);
+      btn.textContent = 'Chyba – zkus znovu';
     }
+    offscreen.innerHTML = '';
+    btn.disabled = false;
+    setTimeout(() => (btn.textContent = 'Stáhnout vše (ZIP)'), 4000);
   };
-  window.__givoStore = { render, LAYOUT };
+  window.__givoStore = { render, LAYOUT, SHOTS, FEATURE };
   render('ios');
 })();
