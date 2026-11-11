@@ -86,7 +86,8 @@ const ITEMS_RAW = [
 ];
 
 const VALUES = { Pohovka: 3000, 'Dětské kolo': 1200, 'Monitor 24"': 1500, Kávovar: 800, Monstera: 400, 'Stolní lampa': 300, 'Krabice knih': 500, 'Zimní bunda': 900, Plyšáci: 300, 'Jídelní židle': 600, Sluchátka: 700, 'Sada hrnků': 200 };
-const ITEMS = ITEMS_RAW.map((it) => ({ ...it, v: VALUES[it.t] || 500, demo: true, contact: DEMO_CONTACT, d: 'Ve velmi dobrém stavu, vyzvednutí po domluvě.', chip: 'U dveří' }));
+const CENTER = { latitude: 50.083, longitude: 14.43 };
+const ITEMS = ITEMS_RAW.map((it, i) => ({ ...it, lat: CENTER.latitude + (((i * 37) % 11) - 5) * 0.0045, lng: CENTER.longitude + (((i * 53) % 13) - 6) * 0.006, v: VALUES[it.t] || 500, demo: true, contact: DEMO_CONTACT, d: 'Ve velmi dobrém stavu, vyzvednutí po domluvě.', chip: 'U dveří' }));
 
 const CATEGORIES = [
   ['🛋️', 'Nábytek'], ['📱', 'Elektronika'], ['👕', 'Oblečení'], ['🧸', 'Pro děti'],
@@ -1732,7 +1733,7 @@ function LockedOverlay({ ctx, onUnlock, onSkip }) {
           </Text>
         </Animated.View>
         <Text style={[st.h1, { fontSize: 28, lineHeight: 34, textAlign: 'center', marginTop: 14 }]}>37 věcí zdarma čeká kolem tebe</Text>
-        <Text style={[st.sub, { textAlign: 'center' }]}>Nové přibývají každou hodinu. Odemkni seznam a buď u nich první.</Text>
+        <Text style={[st.sub, { textAlign: 'center' }]}>Nové přibývají každou hodinu. Odemkni seznam i mapu a buď u nich první.</Text>
         <View style={{ height: 64, overflow: 'hidden', marginTop: 16, marginHorizontal: -24 }}>
           <Animated.View
             style={{ flexDirection: 'row', transform: [{ translateX: marquee.interpolate({ inputRange: [0, 1], outputRange: [0, -rowW] }) }] }}
@@ -1752,7 +1753,7 @@ function LockedOverlay({ ctx, onUnlock, onSkip }) {
           <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 12 }]}>💡 Daruj věc a získáš slevu až −60 %</Text>
         )}
         <Animated.View style={{ marginTop: 16, transform: [{ scale: glow.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] }) }] }}>
-          <Button title="Odemknout seznam" onPress={onUnlock} style={{ marginBottom: 0 }} />
+          <Button title="Odemknout seznam a mapu" onPress={onUnlock} style={{ marginBottom: 0 }} />
         </Animated.View>
         {onSkip ? (
           <Pressable onPress={onSkip} hitSlop={10}>
@@ -1800,12 +1801,104 @@ function Header({ title, right }) {
   );
 }
 
+function MapPin({ item, active }) {
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <View style={[st.mapPin, active && { borderColor: B, transform: [{ scale: 1.15 }] }, item.badge && { borderColor: item.badgeColor || B }]}>
+        <Text style={{ fontSize: 22 }}>{item.e}</Text>
+      </View>
+      <View style={[st.mapPinTip, active && { borderTopColor: B }]} />
+    </View>
+  );
+}
+
+function ItemsMap({ items, selected, onSelect, onOpen }) {
+  const card = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(card, { toValue: selected ? 1 : 0, friction: 8, useNativeDriver: true }).start();
+  }, [selected]);
+  return (
+    <View style={{ flex: 1 }}>
+      {MapView ? (
+        <MapView
+          style={StyleSheet.absoluteFill}
+          initialRegion={{ ...CENTER, latitudeDelta: 0.06, longitudeDelta: 0.06 }}
+          onPress={() => onSelect(null)}
+        >
+          <Marker coordinate={CENTER}>
+            <View style={st.meDot} />
+          </Marker>
+          {items.map((it) => (
+            <Marker
+              key={it.id || it.t}
+              coordinate={{ latitude: it.lat, longitude: it.lng }}
+              onPress={(e) => {
+                e.stopPropagation && e.stopPropagation();
+                onSelect(it);
+              }}
+            >
+              <MapPin item={it} active={selected && (selected.id || selected.t) === (it.id || it.t)} />
+            </Marker>
+          ))}
+        </MapView>
+      ) : (
+        <LinearGradient colors={['#EEF6E8', '#DCEFD3']} style={StyleSheet.absoluteFill}>
+          {items.map((it, i) => (
+            <Pressable
+              key={it.id || it.t}
+              onPress={() => onSelect(it)}
+              style={{ position: 'absolute', left: 20 + ((i * 89) % (W - 80)), top: 30 + ((i * 61) % 380) }}
+            >
+              <MapPin item={it} active={selected && (selected.id || selected.t) === (it.id || it.t)} />
+            </Pressable>
+          ))}
+        </LinearGradient>
+      )}
+      {selected ? (
+        <Animated.View
+          style={[
+            st.mapCard,
+            {
+              opacity: card,
+              transform: [{ translateY: card.interpolate({ inputRange: [0, 1], outputRange: [120, 0] }) }],
+            },
+          ]}
+        >
+          <Pressable onPress={() => onOpen(selected)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <LinearGradient colors={selected.g} style={{ width: 72, height: 72, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {selected.uri ? <Image source={{ uri: selected.uri }} style={StyleSheet.absoluteFill} /> : <Text style={{ fontSize: 32 }}>{selected.e}</Text>}
+            </LinearGradient>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={st.itemTitle}>{selected.t}</Text>
+              <Text style={{ color: selected.badgeColor || GREEN, fontWeight: '800', marginTop: 2 }}>{selected.badge || 'Zdarma'}</Text>
+              <Text style={st.itemMeta}>{selected.demo ? `${selected.km} km • před ${selected.m} min` : 'Tvoje věc'}</Text>
+            </View>
+            <Text style={{ fontSize: 26, color: B, fontWeight: '700' }}>›</Text>
+          </Pressable>
+        </Animated.View>
+      ) : (
+        <View style={st.mapHint} pointerEvents="none">
+          <Text style={{ fontWeight: '700', color: INK }}>📍 {items.length} věcí v okolí • klepni na špendlík</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function HomeTab({ ctx }) {
   const [open, setOpen] = useState(null);
+  const [view, setView] = useState('list');
+  const [sel, setSel] = useState(null);
   const [pay, setPay] = useState(false);
   const own = ctx.myItems
     .filter((x) => x.status !== 'given')
-    .map((x) => ({ ...x, badge: x.status === 'reserved' ? 'REZERVOVÁNO' : 'TVOJE', badgeColor: x.status === 'reserved' ? '#FF9500' : B }));
+    .map((x, i) => ({
+      ...x,
+      lat: CENTER.latitude - 0.002 - i * 0.0015,
+      lng: CENTER.longitude + 0.003,
+      badge: x.status === 'reserved' ? 'REZERVOVÁNO' : 'TVOJE',
+      badgeColor: x.status === 'reserved' ? '#FF9500' : B,
+    }));
   const items = [
     ...own,
     ...ITEMS.map((it) =>
@@ -1822,17 +1915,55 @@ function HomeTab({ ctx }) {
     <View style={{ flex: 1 }}>
       <Header />
       {ctx.data.unlocked ? (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
-          <Text style={[st.h2, { marginBottom: 4 }]}>Zdarma kolem tebe</Text>
-          <Text style={[st.chartAxis, { marginBottom: 14 }]}>Praha • do {ctx.data.km || 5} km</Text>
-          <Grid
-            items={items}
-            onItem={(it) => {
-              tap();
-              setOpen(it);
-            }}
-          />
-        </ScrollView>
+        <View style={{ flex: 1 }}>
+          <View style={{ paddingHorizontal: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View>
+                <Text style={st.h2}>Zdarma kolem tebe</Text>
+                <Text style={st.chartAxis}>Praha • do {ctx.data.km || 5} km</Text>
+              </View>
+              <View style={[st.segment, { marginBottom: 0, width: 190 }]}>
+                {[
+                  ['list', '☰ Seznam'],
+                  ['map', '🗺️ Mapa'],
+                ].map(([k, l]) => (
+                  <Pressable
+                    key={k}
+                    onPress={() => {
+                      tap();
+                      setView(k);
+                      setSel(null);
+                    }}
+                    style={[st.segBtn, view === k && st.segBtnOn]}
+                  >
+                    <Text style={[st.segTxt, view === k && { color: INK }]}>{l}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </View>
+          {view === 'list' ? (
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
+              <Grid
+                items={items}
+                onItem={(it) => {
+                  tap();
+                  setOpen(it);
+                }}
+              />
+            </ScrollView>
+          ) : (
+            <ItemsMap
+              items={items}
+              selected={sel}
+              onSelect={(it) => {
+                tap();
+                setSel(it);
+              }}
+              onOpen={(it) => setOpen(it)}
+            />
+          )}
+        </View>
       ) : (
         <View style={{ flex: 1, overflow: 'hidden' }}>
           <View style={{ paddingHorizontal: 24 }} pointerEvents="none">
@@ -2506,6 +2637,11 @@ const st = StyleSheet.create({
     padding: 14,
   },
   photoThumb: { width: 110, height: 110, borderRadius: 16, marginRight: 10 },
+  mapPin: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#fff', borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 5 },
+  mapPinTip: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#fff', marginTop: -1 },
+  meDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#0A84FF', borderWidth: 4, borderColor: '#fff', shadowColor: '#0A84FF', shadowOpacity: 0.5, shadowRadius: 8, elevation: 4 },
+  mapCard: { position: 'absolute', left: 16, right: 16, bottom: 16, backgroundColor: '#fff', borderRadius: 22, padding: 12, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 10 },
+  mapHint: { position: 'absolute', alignSelf: 'center', bottom: 18, backgroundColor: '#fff', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10, elevation: 6 },
   sheet: {
     position: 'absolute',
     left: 0,
