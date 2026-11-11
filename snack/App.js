@@ -435,7 +435,7 @@ var mapItem = function mapItem(r, myId) {
 
 // ---------- UI základ ----------
 var LOGO_IMG = { uri: 'https://raw.githubusercontent.com/vacino10/takeit2/main/assets/logo-wordmark.png' };
-var LOGO_RATIO = 4.1311;
+var LOGO_RATIO = 3.6255;
 var Logo = function Logo({ size = 40, color = B }) {
   const h = size * 0.82;
   return <Image source={LOGO_IMG} style={{ height: h, width: h * LOGO_RATIO, tintColor: color }} resizeMode="contain" accessibilityLabel="TAKE.it" />;

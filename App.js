@@ -210,7 +210,7 @@ function mapItem(r, myId) {
 
 // ---------- UI základ ----------
 const LOGO_IMG = require('./assets/logo-wordmark.png');
-const LOGO_RATIO = 4.1311;
+const LOGO_RATIO = 3.6255;
 function Logo({ size = 40, color = B }) {
   const h = size * 0.82;
   return <Image source={LOGO_IMG} style={{ height: h, width: h * LOGO_RATIO, tintColor: color }} resizeMode="contain" accessibilityLabel="TAKE.it" />;
