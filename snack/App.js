@@ -434,21 +434,11 @@ var mapItem = function mapItem(r, myId) {
 
 
 // ---------- UI základ ----------
+var LOGO_IMG = { uri: 'https://raw.githubusercontent.com/vacino10/takeit2/main/assets/logo-wordmark.png' };
+var LOGO_RATIO = 4.1311;
 var Logo = function Logo({ size = 40, color = B }) {
-  return (
-    <Text
-      style={{
-        fontSize: size,
-        fontWeight: '900',
-        fontStyle: 'italic',
-        color,
-        letterSpacing: -1,
-        transform: [{ skewY: '-6deg' }],
-      }}
-    >
-      TAKE.IT
-    </Text>
-  );
+  const h = size * 0.82;
+  return <Image source={LOGO_IMG} style={{ height: h, width: h * LOGO_RATIO, tintColor: color }} resizeMode="contain" accessibilityLabel="TAKE.it" />;
 }
 
 var AppIcon = function AppIcon({ size = 120 }) {

@@ -209,21 +209,11 @@ function mapItem(r, myId) {
 
 
 // ---------- UI základ ----------
+const LOGO_IMG = require('./assets/logo-wordmark.png');
+const LOGO_RATIO = 4.1311;
 function Logo({ size = 40, color = B }) {
-  return (
-    <Text
-      style={{
-        fontSize: size,
-        fontWeight: '900',
-        fontStyle: 'italic',
-        color,
-        letterSpacing: -1,
-        transform: [{ skewY: '-6deg' }],
-      }}
-    >
-      TAKE.IT
-    </Text>
-  );
+  const h = size * 0.82;
+  return <Image source={LOGO_IMG} style={{ height: h, width: h * LOGO_RATIO, tintColor: color }} resizeMode="contain" accessibilityLabel="TAKE.it" />;
 }
 
 function AppIcon({ size = 120 }) {
