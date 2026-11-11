@@ -99,7 +99,7 @@ section { padding: 88px 0; }
 .step .phone { width: 240px; margin: 0 auto 26px; }
 .num { display: inline-flex; width: 32px; height: 32px; border-radius: 16px; background: var(--b); color: #fff; font-weight: 800; align-items: center; justify-content: center; margin-bottom: 10px; }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
-.split .phones2 { display: flex; gap: 22px; justify-content: center; }
+.split .phones2 { display: flex; gap: 22px; justify-content: center; align-items: flex-start; }
 .split .phones2 .phone { width: 250px; }
 .split .phones2 .phone:nth-child(2) { margin-top: 60px; }
 .list { list-style: none; padding: 0; margin: 22px 0 0; }
