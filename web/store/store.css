@@ -34,12 +34,12 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sa
 .shot.dark .sub { color: rgba(255, 255, 255, 0.85); }
 
 /* telefon */
-.p { position: absolute; left: 50%; transform: translateX(-50%); padding: 2.4%; border: calc(var(--u) * 0.55) solid transparent; border-radius: 16.5% / 7.7%;
+.p { position: absolute; left: 50%; transform: translateX(-50%); padding: 2.4%; border: calc(var(--pw) * 0.008) solid transparent; border-radius: 16.5% / 7.7%;
   background: linear-gradient(#0a0a0c, #0a0a0c) padding-box, linear-gradient(135deg, #e7e5eb 0%, #8d8a95 22%, #f6f4f9 46%, #7a7782 72%, #d4d1da 100%) border-box;
-  box-shadow: 0 calc(var(--u) * 6) calc(var(--u) * 10) calc(var(--u) * -4) rgba(42, 16, 96, 0.45); }
-.p::before, .p::after { content: ''; position: absolute; width: calc(var(--u) * 0.7); border-radius: 4px; background: linear-gradient(90deg, #6f6c77, #c9c6cf); }
-.p::before { left: calc(var(--u) * -1.15); top: 21%; height: 12%; }
-.p::after { right: calc(var(--u) * -1.15); top: 26%; height: 15%; }
+  box-shadow: 0 calc(var(--pw) * 0.09) calc(var(--pw) * 0.15) calc(var(--pw) * -0.06) rgba(42, 16, 96, 0.45); }
+.p::before, .p::after { content: ''; position: absolute; width: calc(var(--pw) * 0.01); border-radius: 4px; background: linear-gradient(90deg, #6f6c77, #c9c6cf); }
+.p::before { left: calc(var(--pw) * -0.017); top: 21%; height: 12%; }
+.p::after { right: calc(var(--pw) * -0.017); top: 26%; height: 15%; }
 .p .scr { position: relative; width: 100%; aspect-ratio: 390 / 844; border-radius: 14.2% / 6.6%; overflow: hidden; background: #fff; }
 .p .scr > img.shotimg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
 .p .scr .ph { position: absolute; overflow: hidden; background: #ece9f3; z-index: 0; }

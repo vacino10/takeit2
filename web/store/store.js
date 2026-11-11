@@ -32,7 +32,7 @@
         return `<span class="ph" style="left:${cx}%;top:${cy}%;width:${cw}%;height:${ch}%"><img src="${o.u}" alt="" style="left:${((ix - cx) / cw) * 100}%;top:${((iy - cy) / ch) * 100}%;width:${(iw / cw) * 100}%;height:${(ih / ch) * 100}%"></span>`;
       })
       .join('');
-    return `<div class="p" style="width:${w}px;top:${top}px;left:${x}%;z-index:${z};transform:translateX(-50%) rotate(${rot}deg)"><div class="scr">${ph}<img class="shotimg" src="/store/screen-${name}.webp" alt=""></div></div>`;
+    return `<div class="p" style="--pw:${w}px;width:${w}px;top:${top}px;left:${x}%;z-index:${z};transform:translateX(-50%) rotate(${rot}deg)"><div class="scr">${ph}<img class="shotimg" src="/store/screen-${name}.webp" alt=""></div></div>`;
   };
   const head = (top, title, sub) => `<div class="head" style="top:${top}px"><h2>${title}</h2>${sub ? `<p class="sub">${sub}</p>` : ''}</div>`;
   const spark = (x, y, s, c) => `<div class="spark" style="left:${x}%;top:${y}%;width:${s}px;height:${s}px">${SPARK(c)}</div>`;
