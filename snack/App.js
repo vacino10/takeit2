@@ -18,6 +18,7 @@ var { LinearGradient } = require('expo-linear-gradient');
 var Haptics = require('expo-haptics');
 var ImagePicker = require('expo-image-picker');
 var MapViewNative = __d(require('react-native-maps')); var { Marker: MarkerNative, Circle: CircleNative } = require('react-native-maps');
+var Svg = __d(require('react-native-svg')); var { Path, Rect, Circle, Ellipse } = require('react-native-svg');
 
 var MapView = MapViewNative;
 var Marker = MarkerNative;
@@ -281,6 +282,9 @@ var W = Dimensions.get('window').width;
 var tap = () => {
   try { Haptics.selectionAsync().catch(() => {}); } catch (e) {}
 };
+var impact = (style = 'Light') => {
+  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle[style]).catch(() => {}); } catch (e) {}
+};
 var success = () => {
   try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch (e) {}
 };
@@ -503,7 +507,7 @@ var Button = function Button({ title, onPress, disabled, light, style }) {
     <Pressable
       disabled={disabled}
       onPress={() => {
-        tap();
+        impact('Medium');
         onPress && onPress();
       }}
       style={({ pressed }) => [
@@ -526,7 +530,7 @@ var Option = function Option({ label, emoji, selected, onPress, delay = 0 }) {
       <Animated.View style={{ transform: [{ scale: pop }] }}>
         <Pressable
           onPress={() => {
-            tap();
+            impact('Light');
             pop.setValue(0.94);
             Animated.spring(pop, { toValue: 1, friction: 3, tension: 160, useNativeDriver: true }).start();
             onPress();
@@ -745,6 +749,148 @@ var Grid = function Grid({ items, onItem }) {
 }
 
 
+// ---------- Taki – průvodce ----------
+// mood: happy | wow | wink | excited | think
+var Taki = function Taki({ size = 120, mood = 'happy', wave = false, jump = 0 }) {
+  const bob = useRef(new Animated.Value(0)).current;
+  const hop = useRef(new Animated.Value(0)).current;
+  const arm = useRef(new Animated.Value(0)).current;
+  const [blink, setBlink] = useState(false);
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bob, { toValue: 1, duration: 1300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 0, duration: 1300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    ).start();
+    let t;
+    const loop = () => {
+      t = setTimeout(() => {
+        setBlink(true);
+        setTimeout(() => setBlink(false), 140);
+        loop();
+      }, 2200 + Math.random() * 2400);
+    };
+    loop();
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    if (!wave) return arm.setValue(0);
+    const a = Animated.loop(
+      Animated.sequence([
+        Animated.timing(arm, { toValue: 1, duration: 260, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(arm, { toValue: -1, duration: 260, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+      { iterations: 4 }
+    );
+    a.start();
+    return () => a.stop();
+  }, [wave]);
+  useEffect(() => {
+    if (!jump) return;
+    hop.setValue(0);
+    Animated.sequence([
+      Animated.timing(hop, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.spring(hop, { toValue: 0, friction: 4, tension: 120, useNativeDriver: true }),
+    ]).start();
+  }, [jump]);
+  const k = size / 120;
+  const eyesClosed = blink;
+  const eye = (cx, closedForce) =>
+    eyesClosed || closedForce ? (
+      <Path d={`M${cx - 8} 73 Q${cx} 79 ${cx + 8} 73`} stroke="#FFFFFF" strokeWidth={4} fill="none" strokeLinecap="round" />
+    ) : (
+      <>
+        <Ellipse cx={cx} cy={72} rx={9} ry={mood === 'wow' ? 12 : 11} fill="#FFFFFF" />
+        <Circle cx={cx + 2} cy={mood === 'think' ? 69 : 74} r={5} fill="#16102A" />
+        <Circle cx={cx + 4} cy={mood === 'think' ? 67 : 71} r={1.8} fill="#FFFFFF" />
+      </>
+    );
+  let mouth = <Path d="M50 92 Q60 102 70 92" stroke="#FFFFFF" strokeWidth={4} fill="none" strokeLinecap="round" />;
+  if (mood === 'wow') mouth = <Ellipse cx={60} cy={97} rx={7} ry={8} fill="#2A0B66" />;
+  if (mood === 'excited')
+    mouth = (
+      <>
+        <Path d="M47 90 Q60 110 73 90 Z" fill="#2A0B66" />
+        <Path d="M53 99 Q60 105 67 99 Q60 102 53 99 Z" fill="#FF8FB1" />
+      </>
+    );
+  if (mood === 'think') mouth = <Path d="M52 97 Q60 93 68 96" stroke="#FFFFFF" strokeWidth={4} fill="none" strokeLinecap="round" />;
+  return (
+    <Animated.View
+      style={{
+        width: size,
+        height: size * (140 / 120),
+        transform: [
+          { translateY: Animated.add(bob.interpolate({ inputRange: [0, 1], outputRange: [0, -5 * k] }), hop.interpolate({ inputRange: [0, 1], outputRange: [0, -22 * k] })) },
+          { scale: hop.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) },
+        ],
+      }}
+    >
+      <Svg width={size} height={size * (140 / 120)} viewBox="0 0 120 140">
+        <Ellipse cx={60} cy={133} rx={30} ry={5} fill="rgba(17,17,17,0.12)" />
+        <Path d="M42 38 C42 10, 78 10, 78 38" stroke="#5A1FBF" strokeWidth={9} fill="none" strokeLinecap="round" />
+        <Rect x={36} y={114} width={18} height={14} rx={7} fill="#5A1FBF" />
+        <Rect x={66} y={114} width={18} height={14} rx={7} fill="#5A1FBF" />
+        <Rect x={6} y={76} width={16} height={26} rx={8} fill="#5A1FBF" />
+        <Rect x={16} y={34} width={88} height={86} rx={28} fill="#7028E8" />
+        <Rect x={26} y={41} width={38} height={12} rx={6} fill="#FFFFFF" opacity={0.2} />
+        {eye(46, false)}
+        {eye(74, mood === 'wink')}
+        <Ellipse cx={33} cy={90} rx={7} ry={4.5} fill="#FF8FB1" opacity={0.75} />
+        <Ellipse cx={87} cy={90} rx={7} ry={4.5} fill="#FF8FB1" opacity={0.75} />
+        {mouth}
+      </Svg>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: 98 * k,
+          top: 74 * k,
+          width: 16 * k,
+          height: 28 * k,
+          transformOrigin: 'top',
+          transform: [
+            { rotate: wave ? arm.interpolate({ inputRange: [-1, 1], outputRange: ['-150deg', '-115deg'] }) : '-10deg' },
+          ],
+        }}
+      >
+        <View style={{ flex: 1, borderRadius: 8 * k, backgroundColor: '#5A1FBF' }} />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+var SpeechBubble = function SpeechBubble({ text, style, small }) {
+  return (
+    <View style={[st.bubble, style]}>
+      <View style={st.bubbleTail} />
+      <Text style={[st.bubbleTxt, small && { fontSize: 14 }]}>{text}</Text>
+    </View>
+  );
+}
+
+var Blobs = function Blobs() {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(a, { toValue: 1, duration: 6000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(a, { toValue: 0, duration: 6000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Animated.View
+        style={[st.blob, { top: -80, right: -90, transform: [{ translateX: a.interpolate({ inputRange: [0, 1], outputRange: [0, -30] }) }, { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, 24] }) }] }]}
+      />
+      <Animated.View
+        style={[st.blob, { bottom: -120, left: -110, backgroundColor: '#F6F0FF', transform: [{ translateX: a.interpolate({ inputRange: [0, 1], outputRange: [0, 34] }) }, { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, -20] }) }] }]}
+      />
+    </View>
+  );
+}
+
 // ---------- Flow (progress + kroky) ----------
 var Flow = function Flow({ steps, onExit, onFinish, ctx }) {
   const [i, setI] = useState(0);
@@ -759,12 +905,14 @@ var Flow = function Flow({ steps, onExit, onFinish, ctx }) {
   }, [i]);
   const next = () => {
     if (!steps[i].noPoints && !steps[i].hideHeader) ctx.addPoints(10);
+    impact('Soft');
     i < steps.length - 1 ? setI(i + 1) : onFinish();
   };
   const back = () => (i > 0 ? setI(i - 1) : onExit());
   const Step = steps[i];
   return (
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
+      <Blobs />
       {!Step.hideHeader && (
         <View style={st.header}>
           <Pressable onPress={back} hitSlop={14} style={st.backBtn}>
@@ -778,6 +926,14 @@ var Flow = function Flow({ steps, onExit, onFinish, ctx }) {
           <PointsPill points={ctx.points} />
         </View>
       )}
+      {!Step.hideHeader && Step.tip ? (
+        <View style={st.guideRow}>
+          <Taki size={58} mood={Step.mood || 'happy'} jump={i + 1} />
+          <FadeIn key={'tip' + i} style={{ flex: 1, marginLeft: 6 }}>
+            <SpeechBubble text={Step.tip} small />
+          </FadeIn>
+        </View>
+      ) : null}
       <View key={i} style={{ flex: 1 }}>
         <Step next={next} ctx={ctx} />
       </View>
@@ -855,7 +1011,8 @@ var Welcome = function Welcome({ onStart }) {
   ];
   return (
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
-      <View style={{ height: 360 }}>
+      <Blobs />
+      <View style={{ height: 330 }}>
         {picks.map((it, i) => {
           const { rot, ...p } = pos[i];
           return <FloatCard key={it.t} item={it} rot={rot} delay={i * 120} style={p} />;
@@ -866,9 +1023,13 @@ var Welcome = function Welcome({ onStart }) {
         <Twinkle e="🎁" style={{ right: 24, top: 6 }} delay={1200} />
       </View>
       <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'flex-end' }}>
-        <FadeIn delay={500} style={{ alignItems: 'center' }}>
-          <Logo size={44} />
-          <Text style={[st.h1, { textAlign: 'center', marginTop: 18, fontSize: 30 }]}>Věci zdarma od sousedů</Text>
+        <FadeIn delay={400} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+          <Taki size={92} wave mood="excited" />
+          <SpeechBubble text="Ahoj, já jsem Taki! 👋 Provedu tě appkou." style={{ flex: 1, marginLeft: 6 }} />
+        </FadeIn>
+        <FadeIn delay={600} style={{ alignItems: 'center' }}>
+          <Logo size={40} />
+          <Text style={[st.h1, { textAlign: 'center', marginTop: 14, fontSize: 30 }]}>Věci zdarma od sousedů</Text>
           <Text style={[st.sub, { textAlign: 'center' }]}>Najdi, co potřebuješ, a pošli dál, co už nepotřebuješ. Za minutu je hotovo – a na konci tě čeká dárek 🎁</Text>
         </FadeIn>
         <FadeIn delay={800} style={{ marginTop: 24 }}>
@@ -893,15 +1054,15 @@ var Intro = function Intro({ onPick }) {
   }, []);
   return (
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
+      <Blobs />
       <View style={{ flex: 1, paddingHorizontal: 24 }}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Animated.View
-            style={{ transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }] }}
-          >
-            <AppIcon size={124} />
-          </Animated.View>
-          <FadeIn delay={150} style={{ alignItems: 'center', marginTop: 36 }}>
-            <Text style={[st.h1, { textAlign: 'center' }]}>Co tě přivádí do TAKE.IT?</Text>
+          <FadeIn style={{ marginBottom: 6 }}>
+            <SpeechBubble text={sel === 'give' ? 'Super, budeš dárce! 💜' : sel === 'take' ? 'Jdeme hledat poklady! 🔎' : 'Na co se chystáš?'} />
+          </FadeIn>
+          <Taki size={150} wave={!sel} mood={sel ? 'excited' : 'happy'} jump={sel ? (sel === 'give' ? 1 : 2) : 0} />
+          <FadeIn delay={150} style={{ alignItems: 'center', marginTop: 24 }}>
+            <Text style={[st.h1, { textAlign: 'center' }]}>Co tě přivádí do TAKE.it?</Text>
             <Text style={[st.sub, { textAlign: 'center' }]}>Vyber jednu možnost – appku ti nastavíme na míru.</Text>
           </FadeIn>
         </View>
@@ -1458,17 +1619,14 @@ var Setup = function Setup({ next, title, items, emoji }) {
   }, []);
   const per = 100 / items.length;
   const doneCount = Math.floor(p / per);
+  useEffect(() => {
+    if (doneCount > 0) impact('Light');
+  }, [doneCount]);
   return (
     <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
-      <Animated.Text
-        style={{
-          fontSize: 84,
-          textAlign: 'center',
-          transform: [{ translateY: bounce.interpolate({ inputRange: [0, 1], outputRange: [0, -14] }) }],
-        }}
-      >
-        {emoji}
-      </Animated.Text>
+      <View style={{ alignItems: 'center' }}>
+        <Taki size={130} mood={p >= 100 ? 'excited' : 'think'} jump={p >= 100 ? 1 : 0} />
+      </View>
       <Text style={[st.bigNum, { fontSize: 76, color: INK, textAlign: 'center', marginTop: 12 }]}>{p}%</Text>
       <Text style={[st.h1, { textAlign: 'center', fontSize: 28 }]}>{title}</Text>
       <View style={[st.track, { marginTop: 22, height: 10, flex: 0 }]}>
@@ -2124,9 +2282,7 @@ var TakeDone = function TakeDone({ next }) {
   return (
     <StepLayout title="Hotovo, můžeš začít" subtitle="Ukážeme ti věci zdarma kolem tebe. Když něco najdeš, klepni na „Mám zájem“." cta="Ukázat věci kolem mě" onNext={next} center>
       <View style={{ alignItems: 'center' }}>
-        <PopIn>
-          <Text style={{ fontSize: 120 }}>📍</Text>
-        </PopIn>
+        <Taki size={170} mood="excited" wave />
       </View>
     </StepLayout>
   );
@@ -2651,7 +2807,16 @@ var HomeTab = function HomeTab({ ctx }) {
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={st.searchBox}>
             <Text style={{ fontSize: 16 }}>🔍</Text>
-            <TextInput value={q} onChangeText={setQ} placeholder="Hledat věci…" placeholderTextColor="#9A9AA0" style={{ flex: 1, fontSize: 16, marginLeft: 8, color: INK, paddingVertical: 0 }} returnKeyType="search" />
+            <TextInput
+              value={q}
+              onChangeText={setQ}
+              placeholder="Hledat věci…"
+              placeholderTextColor="#9A9AA0"
+              maxFontSizeMultiplier={1.2}
+              style={{ flex: 1, height: 46, fontSize: 16, marginLeft: 8, color: INK, paddingVertical: 0, paddingTop: 0, paddingBottom: 0 }}
+              returnKeyType="search"
+              clearButtonMode="never"
+            />
             {q ? (
               <Pressable onPress={() => setQ('')} hitSlop={10} accessibilityLabel="Smazat hledání">
                 <Text style={{ color: SUB, fontSize: 16 }}>✕</Text>
@@ -3069,6 +3234,27 @@ var SettingsLinks = function SettingsLinks() {
 }
 
 // ---------- Root ----------
+GiveReason.tip = 'Já jsem Taki a provedu tě. Bude to rychlé!';
+GiveImpact.tip = 'Tohle se mi líbí! 💜';
+GiveImpact.mood = 'excited';
+GiveWhat.tip = 'Klidně vyber víc věcí najednou.';
+GiveAmount.tip = 'Ať víme, jak velký úklid chystáš 🧹';
+GiveAmount.mood = 'wink';
+GivePickup.tip = 'Sousedé se ti přizpůsobí.';
+GiveSpeed.tip = 'Vyfotit to zvládneš levou zadní.';
+GiveSpeed.mood = 'wink';
+NotifyGive.tip = 'Ozvu se, jen když se něco děje.';
+GiftStep.tip = 'Pssst… mám pro tebe dárek!';
+GiftStep.mood = 'wow';
+FirstItem.tip = 'Hezká fotka = rychlejší zájemce 📸';
+TakeCategories.tip = 'Ahoj, já jsem Taki! Pomůžu ti najít poklady.';
+TakeSavings.tip = 'Zdarma je nejlepší cena 😄';
+TakeSavings.mood = 'excited';
+TakeCompare.tip = 'Žádné smlouvání, slibuju.';
+TakeCompare.mood = 'wink';
+TakeDistance.tip = 'Kam až dojdeš pěšky?';
+TakeDistance.mood = 'think';
+NotifyTake.tip = 'Dám vědět, když se objeví něco pro tebe.';
 var GIVE_STEPS = [GiveReason, GiveImpact, GiveWhat, GiveAmount, GivePickup, NeighborsMap, GiveSpeed, NotifyGive, SetupGive, GiftStep, FirstItem];
 var TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, NotifyTake, SetupTake, GiftStep, TakeDone];
 
@@ -3431,6 +3617,11 @@ var st = StyleSheet.create({
     padding: 14,
   },
   photoThumb: { width: 110, height: 110, borderRadius: 16, marginRight: 10 },
+  bubble: { backgroundColor: '#FFFFFF', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, shadowColor: '#2A0B66', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4, borderWidth: 1, borderColor: '#EFE8FF' },
+  bubbleTail: { position: 'absolute', left: -6, top: '50%', marginTop: -6, width: 12, height: 12, backgroundColor: '#FFFFFF', transform: [{ rotate: '45deg' }], borderLeftWidth: 1, borderBottomWidth: 1, borderColor: '#EFE8FF' },
+  bubbleTxt: { fontSize: 15, fontWeight: '600', color: INK, lineHeight: 20 },
+  guideRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, marginTop: -4, marginBottom: 4 },
+  blob: { position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: '#F1EBFF', opacity: 0.8 },
   label: { fontSize: 15, fontWeight: '800', color: INK, marginTop: 16, marginBottom: 8 },
   inputSm: { paddingVertical: 12, fontSize: 16, marginTop: 10 },
   addPhoto: { width: 78, height: 78, borderRadius: 16, borderWidth: 2, borderStyle: 'dashed', borderColor: '#D4D4D8', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
