@@ -28,6 +28,7 @@ import * as Notifications from 'expo-notifications';
 import * as Location from 'expo-location';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as StoreReview from 'expo-store-review';
@@ -86,6 +87,18 @@ const CAT_GRAD = {
   'Pro děti': ['#FFF0E8', '#FFD7C2'], Knihy: ['#FDEBEC', '#F9CDD0'], Sport: ['#E6F6FF', '#C9E9FF'],
   Domácnost: ['#F2F2F2', '#E0E0E0'], Zahrada: ['#E8F8EC', '#C8EDD2'], Zvířata: ['#FFF9E0', '#FFEFA8'], Hobby: ['#E6FAF6', '#C4EFE6'],
 };
+const CAT_ICON = {
+  Nábytek: 'bed-outline', Elektronika: 'phone-portrait-outline', Oblečení: 'shirt-outline', 'Pro děti': 'happy-outline',
+  Knihy: 'book-outline', Sport: 'football-outline', Domácnost: 'home-outline', Zahrada: 'leaf-outline', Zvířata: 'paw-outline', Hobby: 'color-palette-outline',
+};
+const Ico = ({ name, size = 18, color = INK, style }) => <Ionicons name={name} size={size} color={color} style={style} />;
+// Řádek s ikonou a textem (místo emoji)
+const IconLine = ({ icon, text, color = SUB, style, bold }) => (
+  <View style={[{ flexDirection: 'row', alignItems: 'center' }, style]}>
+    <Ionicons name={icon} size={15} color={color} />
+    <Text style={[st.chartAxis, { marginLeft: 6, flex: 1, color }, bold && { fontWeight: '700' }]}>{text}</Text>
+  </View>
+);
 const catEmoji = (c) => (CATEGORIES.find((x) => x[1] === c) || ['🎁'])[0];
 
 // Ukázkové věci jen pro úvodní obrazovku (ilustrace)
@@ -120,10 +133,10 @@ const ITEMS = [
 ].map((it) => ({ ...it, img: PHOTO_IDS[it.t] ? photo(PHOTO_IDS[it.t]) : null }));
 
 const CONTACTS = [
-  { id: 'whatsapp', label: 'WhatsApp', e: '💬', color: '#25D366', field: 'phone' },
-  { id: 'sms', label: 'SMS', e: '✉️', color: '#FF9500', field: 'phone' },
-  { id: 'messenger', label: 'Messenger', e: '⚡', color: '#0084FF', field: 'messenger' },
-  { id: 'phone', label: 'Zavolat', e: '📞', color: '#34C759', field: 'phone' },
+  { id: 'whatsapp', label: 'WhatsApp', e: '💬', icon: 'logo-whatsapp', color: '#25D366', field: 'phone' },
+  { id: 'sms', label: 'SMS', e: '✉️', icon: 'chatbubble-ellipses-outline', color: '#FF9500', field: 'phone' },
+  { id: 'messenger', label: 'Messenger', e: '⚡', icon: 'chatbubbles-outline', color: '#0084FF', field: 'messenger' },
+  { id: 'phone', label: 'Zavolat', e: '📞', icon: 'call-outline', color: '#34C759', field: 'phone' },
 ];
 
 // facebook.com/jmeno, fb.com/jmeno, m.me/jmeno nebo jen "jmeno" → odkaz do Messengeru
@@ -1866,7 +1879,7 @@ function ItemsMap({ items, selected, onSelect, onOpen, center = CENTER }) {
         </Animated.View>
       ) : (
         <View style={st.mapHint} pointerEvents="none">
-          <Text style={{ fontWeight: '700', color: INK }}>📍 {items.length} věcí v okolí • klepni na špendlík</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}><Ionicons name="location-outline" size={16} color={B} /><Text style={{ fontWeight: '700', color: INK, marginLeft: 6 }}>{items.length} věcí v okolí</Text></View>
         </View>
       )}
     </View>
@@ -1906,8 +1919,8 @@ function FiltersSheet({ visible, value, onClose, onApply, count }) {
           <Text style={[st.label, { marginTop: 24 }]}>Řadit podle</Text>
           <View style={st.segment}>
             {[
-              ['new', '🕒 Nejnovější'],
-              ['near', '📍 Nejblíž'],
+              ['new', 'Nejnovější'],
+              ['near', 'Nejblíž'],
             ].map(([k, l]) => (
               <Pressable
                 key={k}
@@ -1931,9 +1944,10 @@ function FiltersSheet({ visible, value, onClose, onApply, count }) {
                   tap();
                   toggle(c);
                 }}
-                style={[st.catChip, d.cats.includes(c) && st.catChipSel]}
+                style={[st.catChip, { flexDirection: 'row', alignItems: 'center', paddingVertical: 11 }, d.cats.includes(c) && st.catChipSel]}
               >
-                <Text style={[st.catTxt, d.cats.includes(c) && { color: B }]}>{e}  {c}</Text>
+                <Ionicons name={CAT_ICON[c]} size={17} color={d.cats.includes(c) ? B : INK} />
+                <Text style={[st.catTxt, { marginLeft: 8, fontSize: 15 }, d.cats.includes(c) && { color: B }]}>{c}</Text>
               </Pressable>
             ))}
           </View>
@@ -1948,11 +1962,11 @@ function FiltersSheet({ visible, value, onClose, onApply, count }) {
 
 
 const TABS = [
-  ['home', '🏠', 'Domů'],
-  ['mine', '📦', 'Moje věci'],
-  ['add', '＋', ''],
-  ['activity', '🔔', 'Aktivita'],
-  ['profile', '👤', 'Profil'],
+  ['home', 'home', 'Domů'],
+  ['mine', 'cube', 'Moje věci'],
+  ['add', 'add', ''],
+  ['activity', 'notifications', 'Aktivita'],
+  ['profile', 'person', 'Profil'],
 ];
 
 function MainApp({ ctx }) {
@@ -1977,7 +1991,7 @@ function MainApp({ ctx }) {
               }}
               style={st.tabAdd}
             >
-              <Text style={{ color: '#fff', fontSize: 30, fontWeight: '700', marginTop: -2 }}>＋</Text>
+              <Ionicons name="add" size={30} color="#fff" />
             </Pressable>
           ) : (
             <Pressable
@@ -1988,7 +2002,7 @@ function MainApp({ ctx }) {
               }}
               style={st.tabBtn}
             >
-              <Text style={{ fontSize: 22, opacity: tab === k ? 1 : 0.45 }}>{e}</Text>
+              <Ionicons name={tab === k ? e : e + '-outline'} size={24} color={tab === k ? B : '#9A97A6'} />
               <Text style={[st.tabTxt, tab === k && { color: B }]}>{l}</Text>
               {k === 'activity' && pending ? (
                 <View style={[st.bellBadge, { top: 0, right: 14 }]}>
@@ -2229,7 +2243,7 @@ function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideS
   const phoneOk = !needPhone || phone.replace(/[^0-9]/g, '').length >= 9;
   const messengerOk = !needMessenger || isFbLink(messenger);
   const valid = title.trim().length >= 2 && photos.length > 0 && cat && methods.length > 0 && phoneOk && messengerOk;
-  const chips = [['🚪', 'U dveří'], ['🕒', 'Kdykoli dnes'], ['📦', 'Před domem']];
+  const chips = [['enter-outline', 'U dveří'], ['time-outline', 'Kdykoli dnes'], ['cube-outline', 'Před domem']];
   const publish = () =>
     ctx.requireLogin(async (uid) => {
       try {
@@ -2255,7 +2269,7 @@ function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideS
         </FadeIn>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 14 }}>
           <Pressable onPress={pick} style={st.addPhoto}>
-            <Text style={{ fontSize: 26 }}>📷</Text>
+            <Ionicons name="camera-outline" size={26} color={SUB} />
             <Text style={{ fontSize: 12, fontWeight: '700', color: SUB, marginTop: 2 }}>{photos.length ? `${photos.length}/5` : 'Přidat'}</Text>
           </Pressable>
           {photos.map((u, k) => (
@@ -2290,7 +2304,7 @@ function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideS
               }}
               style={[st.chipSm, cat === c && st.chipSel]}
             >
-              <Text style={[st.chipSmTxt, cat === c && { color: '#fff' }]}>{e} {c}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}><Ionicons name={CAT_ICON[c]} size={15} color={cat === c ? '#fff' : INK} /><Text style={[st.chipSmTxt, { marginLeft: 5 }, cat === c && { color: '#fff' }]}>{c}</Text></View>
             </Pressable>
           ))}
         </ScrollView>
@@ -2305,7 +2319,7 @@ function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideS
               }}
               style={[st.chipSm, chip === l && st.chipSel]}
             >
-              <Text style={[st.chipSmTxt, chip === l && { color: '#fff' }]} numberOfLines={1}>{e} {l}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}><Ionicons name={e} size={15} color={chip === l ? '#fff' : INK} /><Text style={[st.chipSmTxt, { marginLeft: 5 }, chip === l && { color: '#fff' }]} numberOfLines={1}>{l}</Text></View>
             </Pressable>
           ))}
         </View>
@@ -2323,7 +2337,7 @@ function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideS
                 style={{ alignItems: 'center', width: (W - 48) / 4 }}
               >
                 <View style={[st.contactCircle, on && { backgroundColor: c.color, borderColor: c.color }]}>
-                  <Text style={{ fontSize: 24 }}>{c.e}</Text>
+                  <Ionicons name={c.icon} size={24} color={on ? '#fff' : c.color} />
                 </View>
                 <Text style={[st.contactTxt, { marginTop: 4 }, on && { color: INK }]}>{c.label}</Text>
               </Pressable>
@@ -2345,7 +2359,7 @@ function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideS
             style={[st.input, st.inputSm, !messengerOk && messenger.length > 3 && st.inputErr]}
           />
         ) : null}
-        <Text style={[st.chartAxis, { marginTop: 8, fontSize: 12 }]}>🔒 Kontakt uvidí jen ten, koho potvrdíš. Poloha se ukazuje jen přibližně.</Text>
+        <IconLine icon="lock-closed-outline" text="Kontakt uvidí jen ten, koho potvrdíš. Poloha se ukazuje jen přibližně." style={{ marginTop: 8 }} />
       </ScrollView>
       <View style={{ paddingHorizontal: 24, paddingTop: 6 }}>
         {hideSkip ? null : (
@@ -2384,7 +2398,7 @@ function ItemDetail({ item, onClose, ctx }) {
   const methods = (contact && contact.methods) || [];
   const lat = item.lat || CENTER.latitude;
   const lng = item.lng || CENTER.longitude;
-  const share = () => Share.share({ message: `Na TAKE.it je zdarma „${item.t}“ 🎁 Mrkni do appky!` }).catch(() => {});
+  const share = () => Share.share({ message: `Na TAKE.it je zdarma „${item.t}“. Mrkni do appky!` }).catch(() => {});
   const more = () => {
     if (own) return;
     Alert.alert(item.t, null, [
@@ -2421,7 +2435,7 @@ function ItemDetail({ item, onClose, ctx }) {
   if (own) {
     footer =
       item.status === 'reserved' ? (
-        <Button title="Označit jako předané ✅" style={{ marginBottom: 0 }} onPress={() => { ctx.markGiven(item.id); onClose(); }} />
+        <Button title="Označit jako předané" style={{ marginBottom: 0 }} onPress={() => { ctx.markGiven(item.id); onClose(); }} />
       ) : pending ? (
         <Button title={`Zobrazit zájemce (${pending})`} style={{ marginBottom: 0 }} onPress={() => { onClose(); ctx.openInbox(); }} />
       ) : null;
@@ -2437,8 +2451,8 @@ function ItemDetail({ item, onClose, ctx }) {
             }}
             style={({ pressed }) => [st.contactBtn, { backgroundColor: c.color, flex: 1, marginHorizontal: 4, marginTop: 0 }, pressed && { opacity: 0.85 }]}
           >
-            <Text style={{ fontSize: 18 }}>{c.e}</Text>
-            <Text style={[st.contactBtnTxt, { fontSize: 15 }]}>{c.label}</Text>
+            <Ionicons name={c.icon} size={18} color="#fff" />
+            <Text style={[st.contactBtnTxt, { fontSize: 15, marginLeft: 6 }]}>{c.label}</Text>
           </Pressable>
         ))}
       </View>
@@ -2467,7 +2481,7 @@ function ItemDetail({ item, onClose, ctx }) {
   } else if (asking) {
     footer = <Button title={busy ? 'Odesílám…' : 'Odeslat žádost'} disabled={!msg.trim() || busy} style={{ marginBottom: 0 }} onPress={send} />;
   } else {
-    footer = <Button title="🙋  Mám zájem" style={{ marginBottom: 0 }} onPress={() => setAsking(true)} />;
+    footer = <Button title="Mám zájem" style={{ marginBottom: 0 }} onPress={() => setAsking(true)} />;
   }
 
   return (
@@ -2478,15 +2492,15 @@ function ItemDetail({ item, onClose, ctx }) {
             <Gallery item={item} height={340} />
             <View style={st.detailTopBar}>
               <Pressable onPress={onClose} hitSlop={10} style={st.roundBtn} accessibilityLabel="Zavřít">
-                <Text style={{ fontSize: 18, color: INK }}>✕</Text>
+                <Ionicons name="close" size={22} color={INK} />
               </Pressable>
               <View style={{ flexDirection: 'row' }}>
                 <Pressable onPress={share} hitSlop={10} style={[st.roundBtn, { marginRight: 10 }]} accessibilityLabel="Sdílet">
-                  <Text style={{ fontSize: 17 }}>↗︎</Text>
+                  <Ionicons name="share-outline" size={20} color={INK} />
                 </Pressable>
                 {!own ? (
                   <Pressable onPress={more} hitSlop={10} style={st.roundBtn} accessibilityLabel="Další možnosti">
-                    <Text style={{ fontSize: 20, fontWeight: '900', marginTop: -6 }}>…</Text>
+                    <Ionicons name="ellipsis-horizontal" size={20} color={INK} />
                   </Pressable>
                 ) : null}
               </View>
@@ -2500,14 +2514,17 @@ function ItemDetail({ item, onClose, ctx }) {
                 <Text style={{ color: GREEN, fontWeight: '900' }}>ZDARMA</Text>
               </View>
               <View style={st.metaChip}>
-                <Text style={st.metaTxt}>📍 {own ? 'Tvoje věc' : item.kmText}</Text>
+                <Ionicons name="location-outline" size={14} color={INK} />
+                <Text style={[st.metaTxt, { marginLeft: 4 }]}>{own ? 'Tvoje věc' : item.kmText}</Text>
               </View>
               <View style={st.metaChip}>
-                <Text style={st.metaTxt}>🕒 {ago(item.created_at)}</Text>
+                <Ionicons name="time-outline" size={14} color={INK} />
+                <Text style={[st.metaTxt, { marginLeft: 4 }]}>{ago(item.created_at)}</Text>
               </View>
               {item.chip ? (
                 <View style={st.metaChip}>
-                  <Text style={st.metaTxt}>🚪 {item.chip}</Text>
+                  <Ionicons name="enter-outline" size={14} color={INK} />
+                  <Text style={[st.metaTxt, { marginLeft: 4 }]}>{item.chip}</Text>
                 </View>
               ) : null}
             </View>
@@ -2518,7 +2535,7 @@ function ItemDetail({ item, onClose, ctx }) {
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={st.h2}>{own ? 'Tvoje věc' : item.owner_name}</Text>
-                <Text style={st.chartAxis}>{own ? `👀 ${item.views} zobrazení` : 'Daruje přes TAKE.it'}</Text>
+                <Text style={st.chartAxis}>{own ? `${item.views} zobrazení` : 'Daruje přes TAKE.it'}</Text>
               </View>
             </View>
 
@@ -2541,18 +2558,18 @@ function ItemDetail({ item, onClose, ctx }) {
                 <MapCircle center={{ latitude: lat, longitude: lng }} radius={600} fillColor="rgba(112,40,232,0.18)" strokeColor={B} strokeWidth={2} />
               </MapView>
             </View>
-            <Text style={[st.chartAxis, { marginTop: 8 }]}>🔒 Přesné místo ti dárce pošle až po potvrzení.</Text>
+            <IconLine icon="lock-closed-outline" text="Přesné místo ti dárce pošle až po potvrzení." style={{ marginTop: 8 }} />
 
             {own ? (
               <View style={[st.chartCard, { marginTop: 22 }]}>
                 <Text style={st.h2}>Stav</Text>
                 <Text style={st.chartAxis}>
                   {item.status === 'given'
-                    ? '✅ Předáno – díky, že posíláš věci dál!'
+                    ? 'Předáno – díky, že posíláš věci dál!'
                     : item.status === 'reserved'
-                    ? '🤝 Rezervováno – zájemce dostal tvůj kontakt.'
+                    ? 'Rezervováno – zájemce dostal tvůj kontakt.'
                     : incoming.length
-                    ? `🙋 ${incoming.length} zájemci${pending ? ` • čeká ${pending}` : ''}`
+                    ? `${incoming.length} zájemci${pending ? ` • čeká ${pending}` : ''}`
                     : 'Zatím bez zájemců. Jakmile se někdo ozve, přijde ti upozornění.'}
                 </Text>
                 {item.status !== 'given' ? (
@@ -2573,7 +2590,7 @@ function ItemDetail({ item, onClose, ctx }) {
 
             {!own && status === 'accepted' ? (
               <View style={[st.statusCard, { marginTop: 22, backgroundColor: '#DDF7E5' }]}>
-                <Text style={st.h2}>✅ Dárce potvrdil – je to tvoje!</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}><Ionicons name="checkmark-circle" size={22} color={GREEN} /><Text style={[st.h2, { marginLeft: 8 }]}>Dárce potvrdil – je to tvoje!</Text></View>
                 <Text style={st.chartAxis}>Kontakt je odemčený, ozvi se mu tlačítkem dole.</Text>
               </View>
             ) : null}
@@ -2585,7 +2602,7 @@ function ItemDetail({ item, onClose, ctx }) {
               </FadeIn>
             ) : null}
             {!own && !status && !asking && item.status === 'active' ? (
-              <Text style={[st.chartAxis, { marginTop: 18 }]}>🔒 Kontakt na dárce se odemkne, až potvrdí tvoji žádost.</Text>
+              <IconLine icon="lock-closed-outline" text="Kontakt na dárce se odemkne, až potvrdí tvoji žádost." style={{ marginTop: 18 }} />
             ) : null}
           </View>
         </ScrollView>
@@ -2602,10 +2619,10 @@ function Given({ ctx, onContinue }) {
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
       <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
         <FadeIn style={{ alignItems: 'center' }}>
-          <Text style={{ fontSize: 64 }}>🎉</Text>
-          <Text style={[st.h1, { textAlign: 'center' }]}>{item ? 'Tvoje věc je venku!' : 'Vše nastaveno!'}</Text>
+          <Taki size={120} mood="excited" jump={1} />
+          <Text style={[st.h1, { textAlign: 'center', marginTop: 8 }]}>{item ? 'Tvoje věc je venku!' : 'Vše nastaveno!'}</Text>
           <Text style={[st.sub, { textAlign: 'center' }]}>
-            {item ? 'Dáme ti vědět, jakmile si o ni někdo řekne.' : 'Věc můžeš přidat kdykoli tlačítkem ＋ dole.'}
+            {item ? 'Dáme ti vědět, jakmile si o ni někdo řekne.' : 'Věc můžeš přidat kdykoli tlačítkem + dole.'}
           </Text>
         </FadeIn>
         {item ? (
@@ -2638,7 +2655,7 @@ function HomeTab({ ctx }) {
     x.own
       ? { ...x, badge: x.status === 'reserved' ? 'REZERVOVÁNO' : 'TVOJE', badgeColor: x.status === 'reserved' ? '#FF9500' : B }
       : ctx.outgoing[x.id] === 'accepted'
-      ? { ...x, badge: 'TVOJE 🎉', badgeColor: B }
+      ? { ...x, badge: 'TVOJE', badgeColor: B }
       : ctx.outgoing[x.id] === 'pending'
       ? { ...x, badge: 'ČEKÁ', badgeColor: '#FF9500' }
       : x.status === 'reserved'
@@ -2662,7 +2679,7 @@ function HomeTab({ ctx }) {
       <View style={{ paddingHorizontal: 24 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={st.searchBox}>
-            <Text style={{ fontSize: 16 }}>🔍</Text>
+            <Ionicons name="search" size={18} color="#9A9AA0" />
             <TextInput
               value={q}
               onChangeText={setQ}
@@ -2675,7 +2692,7 @@ function HomeTab({ ctx }) {
             />
             {q ? (
               <Pressable onPress={() => setQ('')} hitSlop={10} accessibilityLabel="Smazat hledání">
-                <Text style={{ color: SUB, fontSize: 16 }}>✕</Text>
+                <Ionicons name="close-circle" size={18} color="#B5B5BA" />
               </Pressable>
             ) : null}
           </View>
@@ -2687,7 +2704,7 @@ function HomeTab({ ctx }) {
             style={[st.filterBtn, activeFilters ? { backgroundColor: B } : null]}
             accessibilityLabel="Filtry"
           >
-            <Text style={{ fontSize: 18, color: activeFilters ? '#fff' : INK }}>⚙︎</Text>
+            <Ionicons name="options-outline" size={21} color={activeFilters ? '#fff' : INK} />
             {activeFilters ? (
               <View style={[st.bellBadge, { top: -5, right: -5 }]}>
                 <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{activeFilters}</Text>
@@ -2718,9 +2735,9 @@ function HomeTab({ ctx }) {
           </Text>
           <View style={[st.segment, { marginBottom: 0, width: 190 }]}>
             {[
-              ['list', '☰ Seznam'],
-              ['map', '🗺️ Mapa'],
-            ].map(([k, l]) => (
+              ['list', 'Seznam', 'grid-outline'],
+              ['map', 'Mapa', 'map-outline'],
+            ].map(([k, l, ic]) => (
               <Pressable
                 key={k}
                 onPress={() => {
@@ -2730,7 +2747,10 @@ function HomeTab({ ctx }) {
                 }}
                 style={[st.segBtn, view === k && st.segBtnOn]}
               >
-                <Text style={[st.segTxt, view === k && { color: INK }]}>{l}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name={ic} size={15} color={view === k ? INK : SUB} />
+                  <Text style={[st.segTxt, { marginLeft: 5 }, view === k && { color: INK }]}>{l}</Text>
+                </View>
               </Pressable>
             ))}
           </View>
@@ -2757,7 +2777,7 @@ function HomeTab({ ctx }) {
             <ActivityIndicator color={B} style={{ marginTop: 40 }} />
           ) : filtered.length === 0 ? (
             <View style={{ alignItems: 'center', marginTop: 40 }}>
-              <Text style={{ fontSize: 48 }}>{items.length ? '🔍' : '🌱'}</Text>
+              <Taki size={100} mood={items.length ? 'think' : 'happy'} />
               <Text style={[st.h2, { marginTop: 10, textAlign: 'center' }]}>{items.length ? 'Nic jsme nenašli' : 'Kolem tebe zatím nic není'}</Text>
               <Text style={[st.chartAxis, { textAlign: 'center' }]}>
                 {items.length ? 'Zkus jiné slovo nebo uvolni filtry.' : 'Buď první, kdo tu něco daruje – sousedé to uvidí.'}
@@ -2765,7 +2785,7 @@ function HomeTab({ ctx }) {
               {items.length ? (
                 <Button title="Zrušit filtry" light style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={() => { setQ(''); setF({ cats: [], km: 20, sort: 'new' }); }} />
               ) : (
-                <Button title="＋ Darovat věc" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={ctx.openAdd} />
+                <Button title="Darovat věc" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={ctx.openAdd} />
               )}
             </View>
           ) : (
@@ -2843,9 +2863,9 @@ function MyItemsTab({ ctx }) {
         </View>
         {list.length === 0 ? (
           <View style={{ alignItems: 'center', marginTop: 40 }}>
-            <Text style={{ fontSize: 48 }}>{seg === 'given' ? '🤝' : '📦'}</Text>
+            <Taki size={100} mood="happy" />
             <Text style={[st.h2, { marginTop: 10 }]}>{seg === 'active' ? 'Nic tu zatím není' : seg === 'reserved' ? 'Žádné rezervace' : 'Zatím nic předaného'}</Text>
-            {seg === 'active' ? <Button title="＋ Darovat věc" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={ctx.openAdd} /> : null}
+            {seg === 'active' ? <Button title="Darovat věc" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={ctx.openAdd} /> : null}
           </View>
         ) : null}
         {list.map((it, i) => {
@@ -2864,7 +2884,7 @@ function MyItemsTab({ ctx }) {
                 <View style={{ padding: 12, flex: 1 }}>
                   <Text style={st.itemTitle}>{it.t}</Text>
                   <Text style={st.itemMeta}>
-                    {it.status === 'given' ? '✅ Předáno' : it.status === 'reserved' ? '🤝 Rezervováno' : `👀 ${it.views} zobrazení • 🙋 ${req.length}`}
+                    {it.status === 'given' ? 'Předáno' : it.status === 'reserved' ? 'Rezervováno' : `${it.views} zobrazení • ${req.length} ${req.length === 1 ? 'zájemce' : 'zájemců'}`}
                   </Text>
                   {pend ? <Text style={[st.itemMeta, { color: B, fontWeight: '800' }]}>Čeká na tebe {pend} {pend === 1 ? 'žádost' : 'žádosti'}</Text> : null}
                 </View>
@@ -2929,7 +2949,7 @@ function ActivityTab({ ctx }) {
               </View>
             ) : (
               <Text style={[st.chartAxis, { marginTop: 10, fontWeight: '700', color: r.status === 'accepted' ? GREEN : SUB }]}>
-                {r.status === 'accepted' ? '✅ Potvrzeno – zájemce vidí tvůj kontakt' : 'Odmítnuto'}
+                {r.status === 'accepted' ? 'Potvrzeno – zájemce vidí tvůj kontakt' : 'Odmítnuto'}
               </Text>
             )}
           </FadeIn>
@@ -2943,7 +2963,7 @@ function ActivityTab({ ctx }) {
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={st.h2}>{r.item.title}</Text>
                 <Text style={[st.chartAxis, r.status === 'accepted' && { color: GREEN, fontWeight: '700' }]}>
-                  {r.status === 'accepted' ? '✅ Dárce potvrdil – klepni pro kontakt' : r.status === 'pending' ? '⏳ Čeká na potvrzení dárce' : 'Dárce vybral někoho jiného'}
+                  {r.status === 'accepted' ? 'Dárce potvrdil – klepni pro kontakt' : r.status === 'pending' ? 'Čeká na potvrzení dárce' : 'Dárce vybral někoho jiného'}
                 </Text>
               </View>
             </Pressable>
@@ -2981,7 +3001,7 @@ function ProfileTab({ ctx, onRestart }) {
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
         <View style={{ alignItems: 'center' }}>
           <View style={st.bigAvatar}>
-            <Text style={{ color: '#fff', fontSize: 40, fontWeight: '900' }}>{(name.trim()[0] || '🙂').toUpperCase()}</Text>
+            <Text style={{ color: '#fff', fontSize: 40, fontWeight: '900' }}>{(name.trim()[0] || 'T').toUpperCase()}</Text>
           </View>
           <TextInput
             value={name}
@@ -2994,7 +3014,7 @@ function ProfileTab({ ctx, onRestart }) {
           />
           <Text style={[st.chartAxis, { marginTop: 4 }]}>Jméno uvidí sousedé u tvých věcí</Text>
           <View style={[st.pointsPill, { marginTop: 10 }]}>
-            <Text style={{ fontWeight: '900', color: B }}>⭐ {(p && p.points) || 0} bodů dobra</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}><Ionicons name="star" size={14} color={B} /><Text style={{ fontWeight: '900', color: B, marginLeft: 5 }}>{(p && p.points) || 0} bodů dobra</Text></View>
           </View>
         </View>
         <View style={{ flexDirection: 'row', marginTop: 20 }}>
@@ -3013,13 +3033,15 @@ function ProfileTab({ ctx, onRestart }) {
         <Text style={st.section}>Odznaky</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
           {[
-            ['🌱', 'Nováček', !!(p && p.welcome_claimed)],
-            ['🎁', 'První dar', given >= 1],
-            ['🤝', 'Dobrý soused', handed >= 1],
-            ['🔎', 'Lovec pokladů', got >= 1],
+            ['leaf', 'Nováček', !!(p && p.welcome_claimed)],
+            ['gift', 'První dar', given >= 1],
+            ['people', 'Dobrý soused', handed >= 1],
+            ['search', 'Lovec pokladů', got >= 1],
           ].map(([e, l, on]) => (
-            <View key={l} style={[st.badgeBox, !on && { opacity: 0.35 }]}>
-              <Text style={{ fontSize: 30 }}>{on ? e : '🔒'}</Text>
+            <View key={l} style={st.badgeBox}>
+              <View style={[st.badgeIcon, on ? { backgroundColor: B } : { backgroundColor: '#EDEDF1' }]}>
+                <Ionicons name={on ? e : 'lock-closed'} size={20} color={on ? '#fff' : '#B5B5BA'} />
+              </View>
               <Text style={[st.chartAxis, { color: on ? INK : SUB, fontWeight: '700', textAlign: 'center' }]}>{l}</Text>
             </View>
           ))}
@@ -3029,9 +3051,15 @@ function ProfileTab({ ctx, onRestart }) {
         <View style={st.chartCard}>
           {c && c.methods && c.methods.length ? (
             <>
-              <Text style={{ fontSize: 22 }}>{CONTACTS.filter((x) => c.methods.includes(x.id)).map((x) => x.e).join('  ')}</Text>
-              {c.phone ? <Text style={st.chartAxis}>📱 {c.phone}</Text> : null}
-              {c.messenger ? <Text style={st.chartAxis} numberOfLines={1}>⚡ {c.messenger}</Text> : null}
+              <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+                {CONTACTS.filter((x) => c.methods.includes(x.id)).map((x) => (
+                  <View key={x.id} style={[st.miniContact, { backgroundColor: x.color }]}>
+                    <Ionicons name={x.icon} size={16} color="#fff" />
+                  </View>
+                ))}
+              </View>
+              {c.phone ? <IconLine icon="call-outline" text={c.phone} /> : null}
+              {c.messenger ? <IconLine icon="link-outline" text={c.messenger} style={{ marginTop: 2 }} /> : null}
               <Text style={[st.chartAxis, { marginTop: 6 }]}>Vidí ho jen zájemce, kterého potvrdíš. Předvyplní se u další věci.</Text>
             </>
           ) : (
@@ -3051,7 +3079,8 @@ function ProfileTab({ ctx, onRestart }) {
               ])
             }
           >
-            <Text style={[st.body, { flex: 1 }]}>Odhlásit se</Text>
+            <Ionicons name="log-out-outline" size={20} color={INK} />
+            <Text style={[st.body, { flex: 1, marginLeft: 12 }]}>Odhlásit se</Text>
           </Pressable>
           <Pressable
             style={[st.settingRow, { borderTopWidth: 1, borderTopColor: '#E8E8ED' }]}
@@ -3062,7 +3091,8 @@ function ProfileTab({ ctx, onRestart }) {
               ])
             }
           >
-            <Text style={[st.body, { flex: 1, color: '#FF3B30' }]}>Smazat účet</Text>
+            <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+            <Text style={[st.body, { flex: 1, color: '#FF3B30', marginLeft: 12 }]}>Smazat účet</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -3072,18 +3102,18 @@ function ProfileTab({ ctx, onRestart }) {
 
 function SettingsLinks({ onReplay }) {
   const rows = [
-    ...(onReplay ? [['🔁', 'Projít úvod znovu', onReplay]] : []),
-    ['📄', 'Podmínky použití', () => Linking.openURL(TERMS_URL)],
-    ['🔒', 'Ochrana soukromí', () => Linking.openURL(PRIVACY_URL)],
-    ['✉️', 'Napsat podpoře', () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=TAKE.it`).catch(() => Alert.alert('Podpora', SUPPORT_EMAIL))],
+    ...(onReplay ? [['refresh-outline', 'Projít úvod znovu', onReplay]] : []),
+    ['document-text-outline', 'Podmínky použití', () => Linking.openURL(TERMS_URL)],
+    ['shield-checkmark-outline', 'Ochrana soukromí', () => Linking.openURL(PRIVACY_URL)],
+    ['mail-outline', 'Napsat podpoře', () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=TAKE.it`).catch(() => Alert.alert('Podpora', SUPPORT_EMAIL))],
   ];
   return (
     <View style={[st.chartCard, { paddingVertical: 4 }]}>
       {rows.map(([e, l, fn], i) => (
         <Pressable key={l} onPress={fn} style={[st.settingRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#E8E8ED' }]}>
-          <Text style={{ fontSize: 18 }}>{e}</Text>
+          <Ionicons name={e} size={20} color={INK} />
           <Text style={[st.body, { flex: 1, marginLeft: 12 }]}>{l}</Text>
-          <Text style={{ fontSize: 20, color: '#C7C7CC' }}>›</Text>
+          <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
         </Pressable>
       ))}
     </View>
@@ -3273,11 +3303,11 @@ function Root() {
       setLogin({ then: fn });
     },
     requestItem: (item, msg, uid) =>
-      run(() => api.requestItem(uid || myId, item.id, msg), { title: 'Žádost odeslána 🙋', body: 'Dáme ti vědět, jakmile dárce odpoví.' }),
-    accept: (id) => run(() => api.acceptRequest(id), { title: 'Potvrzeno 🎉', body: 'Zájemce dostal upozornění a tvůj kontakt. Po předání věc označ jako předanou.' }),
+      run(() => api.requestItem(uid || myId, item.id, msg), { title: 'Žádost odeslána', body: 'Dáme ti vědět, jakmile dárce odpoví.' }),
+    accept: (id) => run(() => api.acceptRequest(id), { title: 'Potvrzeno', body: 'Zájemce dostal upozornění a tvůj kontakt. Po předání věc označ jako předanou.' }),
     decline: (id) => run(() => api.declineRequest(id)),
     markGiven: async (id) => {
-      await run(() => api.markGiven(id), { title: 'Předáno ✅ +100 ⭐', body: 'Díky, že posíláš věci dál! 💜' });
+      await run(() => api.markGiven(id), { title: 'Předáno · +100 bodů', body: 'Díky, že posíláš věci dál.' });
       // Hodnocení v App Store – systémové okno Apple, jen jednou a po dobrém zážitku
       try {
         const asked = await AsyncStorage.getItem('review_asked');
@@ -3476,7 +3506,7 @@ const st = StyleSheet.create({
   photoCount: { position: 'absolute', bottom: 12, right: 14, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
   detailTopBar: { position: 'absolute', top: 16, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' },
   roundBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center' },
-  metaChip: { backgroundColor: CARD, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8, marginBottom: 8 },
+  metaChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8, marginBottom: 8 },
   metaTxt: { fontWeight: '700', color: INK, fontSize: 13 },
   donorCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 20, padding: 14, marginTop: 14 },
   verified: { backgroundColor: B_LIGHT, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
@@ -3488,6 +3518,8 @@ const st = StyleSheet.create({
   rewardRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 20, padding: 14, marginBottom: 12 },
   rewardIcon: { width: 54, height: 54, borderRadius: 16, backgroundColor: B_LIGHT, alignItems: 'center', justifyContent: 'center' },
   badgeBox: { width: (W - 48 - 24) / 4, backgroundColor: CARD, borderRadius: 16, paddingVertical: 12, alignItems: 'center', marginBottom: 8 },
+  badgeIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  miniContact: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
   mapPin: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#fff', borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 5 },
   mapPinTip: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#fff', marginTop: -1 },
   meDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#0A84FF', borderWidth: 4, borderColor: '#fff', shadowColor: '#0A84FF', shadowOpacity: 0.5, shadowRadius: 8, elevation: 4 },
