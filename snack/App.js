@@ -52,8 +52,8 @@ var isConfigured = true;
 
 // Doplň před odesláním do App Store
 var SUPPORT_EMAIL = 'podpora@givo.cz';
-var TERMS_URL = 'https://givo-27d3a.web.app/podminky';
-var PRIVACY_URL = 'https://givo-27d3a.web.app/soukromi';
+var TERMS_URL = 'https://getgivo.web.app/podminky';
+var PRIVACY_URL = 'https://getgivo.web.app/soukromi';
 
 
 // ---------- Přihlášení (Apple, zdarma) ----------

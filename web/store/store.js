@@ -202,7 +202,7 @@
         const ic = u * 24;
         return `<img class="icon-big" src="/img/icon-512.png" alt="" style="top:${u * 16}px;width:${ic}px;height:${ic}px">` +
           head(u * 46, 'Věci od sousedů <em>zdarma.</em>', 'givo – darování věcí, které by jinak skončily v popelnici. Brzy v App Store a na Google Play.') +
-          `<div class="foot" style="bottom:${u * 14}px;color:#fff;font-size:${u * 4}px">givo-27d3a.web.app</div>` +
+          `<div class="foot" style="bottom:${u * 14}px;color:#fff;font-size:${u * 4}px">getgivo.web.app</div>` +
           spark(14, 18, u * 5, '#7DE3B8') + spark(84, 30, u * 4, '#ffffff') +
           `<div class="slideno" style="color:rgba(255,255,255,.7)">5/5</div>`;
       },
