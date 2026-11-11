@@ -142,6 +142,11 @@ const TIERS = [
 ];
 const discountFor = (n) => TIERS.reduce((d, t) => (n >= t.n ? t.pct : d), 0);
 const nextTier = (n) => TIERS.find((t) => n < t.n);
+const discInfo = (ctx) => {
+  const donor = discountFor(ctx.myItems.length);
+  const welcome = ctx.data.welcomeGift ? 20 : 0;
+  return donor >= welcome ? { pct: donor, label: 'jako dárce' } : { pct: welcome, label: 'uvítací dárek' };
+};
 
 // ---------- UI základ ----------
 function Logo({ size = 40, color = B }) {
@@ -255,25 +260,112 @@ function Button({ title, onPress, disabled, light, style }) {
 }
 
 function Option({ label, emoji, selected, onPress, delay = 0 }) {
+  const pop = useRef(new Animated.Value(1)).current;
   return (
     <FadeIn delay={delay}>
-      <Pressable
-        onPress={() => {
-          tap();
-          onPress();
-        }}
-        style={({ pressed }) => [
-          st.option,
-          selected && st.optionSel,
-          pressed && { transform: [{ scale: 0.98 }] },
-        ]}
-      >
-        <Text style={[st.optionTxt, selected && { color: B }]}>
-          {emoji ? emoji + '  ' : ''}
-          {label}
-        </Text>
-      </Pressable>
+      <Animated.View style={{ transform: [{ scale: pop }] }}>
+        <Pressable
+          onPress={() => {
+            tap();
+            pop.setValue(0.94);
+            Animated.spring(pop, { toValue: 1, friction: 3, tension: 160, useNativeDriver: true }).start();
+            onPress();
+          }}
+          style={[st.option, selected && st.optionSel]}
+        >
+          <Text style={[st.optionTxt, selected && { color: B }]}>
+            {emoji ? emoji + '  ' : ''}
+            {label}
+          </Text>
+          {selected ? (
+            <View style={st.optCheck}>
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '900' }}>✓</Text>
+            </View>
+          ) : null}
+        </Pressable>
+      </Animated.View>
     </FadeIn>
+  );
+}
+
+function Confetti({ run, count = 28 }) {
+  const parts = useRef(
+    Array.from({ length: count }, (_, i) => ({
+      a: new Animated.Value(0),
+      dx: (Math.random() - 0.5) * W * 0.95,
+      dy: -120 - Math.random() * 220,
+      rot: (Math.random() - 0.5) * 720,
+      e: ['🎉', '✨', '💜', '⭐', '🎁', '🟣'][i % 6],
+    }))
+  ).current;
+  useEffect(() => {
+    if (!run) return;
+    Animated.stagger(
+      12,
+      parts.map((p) => Animated.timing(p.a, { toValue: 1, duration: 1500, easing: Easing.out(Easing.quad), useNativeDriver: true }))
+    ).start();
+  }, [run]);
+  if (!run) return null;
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+      {parts.map((p, i) => (
+        <Animated.Text
+          key={i}
+          style={{
+            position: 'absolute',
+            fontSize: 22,
+            opacity: p.a.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 1, 0] }),
+            transform: [
+              { translateX: p.a.interpolate({ inputRange: [0, 1], outputRange: [0, p.dx] }) },
+              { translateY: p.a.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, p.dy, p.dy + 260] }) },
+              { rotate: p.a.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${p.rot}deg`] }) },
+            ],
+          }}
+        >
+          {p.e}
+        </Animated.Text>
+      ))}
+    </View>
+  );
+}
+
+function PointsPill({ points }) {
+  const prev = useRef(points);
+  const bump = useRef(new Animated.Value(1)).current;
+  const fly = useRef(new Animated.Value(0)).current;
+  const [diff, setDiff] = useState(0);
+  useEffect(() => {
+    const d = points - prev.current;
+    prev.current = points;
+    if (d <= 0) return;
+    setDiff(d);
+    bump.setValue(1.3);
+    Animated.spring(bump, { toValue: 1, friction: 3, useNativeDriver: true }).start();
+    fly.setValue(0);
+    Animated.timing(fly, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [points]);
+  return (
+    <View style={{ marginLeft: 10 }}>
+      <Animated.View style={[st.pointsPill, { transform: [{ scale: bump }] }]}>
+        <Text style={{ fontWeight: '900', color: B }}>⭐ {points}</Text>
+      </Animated.View>
+      {diff ? (
+        <Animated.Text
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            right: 6,
+            top: 0,
+            fontWeight: '900',
+            color: B,
+            opacity: fly.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] }),
+            transform: [{ translateY: fly.interpolate({ inputRange: [0, 1], outputRange: [20, 34] }) }],
+          }}
+        >
+          +{diff}
+        </Animated.Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -393,7 +485,10 @@ function Flow({ steps, onExit, onFinish, ctx }) {
       useNativeDriver: false,
     }).start();
   }, [i]);
-  const next = () => (i < steps.length - 1 ? setI(i + 1) : onFinish());
+  const next = () => {
+    if (!steps[i].noPoints && !steps[i].hideHeader) ctx.addPoints(10);
+    i < steps.length - 1 ? setI(i + 1) : onFinish();
+  };
   const back = () => (i > 0 ? setI(i - 1) : onExit());
   const Step = steps[i];
   return (
@@ -408,10 +503,105 @@ function Flow({ steps, onExit, onFinish, ctx }) {
               style={[st.fill, { width: prog.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]}
             />
           </View>
+          <PointsPill points={ctx.points} />
         </View>
       )}
       <View key={i} style={{ flex: 1 }}>
         <Step next={next} ctx={ctx} />
+      </View>
+    </SafeAreaView>
+  );
+}
+
+// ---------- Welcome ----------
+function FloatCard({ item, style, rot, delay }) {
+  const inA = useRef(new Animated.Value(0)).current;
+  const fl = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(inA, { toValue: 1, friction: 6, delay, useNativeDriver: true }).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(fl, { toValue: 1, duration: 1800 + delay, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(fl, { toValue: 0, duration: 1800 + delay, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return (
+    <Animated.View
+      style={[
+        st.floatCard,
+        style,
+        {
+          opacity: inA,
+          transform: [
+            { scale: inA },
+            { translateY: fl.interpolate({ inputRange: [0, 1], outputRange: [0, -10] }) },
+            { rotate: `${rot}deg` },
+          ],
+        },
+      ]}
+    >
+      <LinearGradient colors={item.g} style={{ height: 86, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 40 }}>{item.e}</Text>
+        <View style={[st.freeBadge, { top: 6, left: 6, paddingHorizontal: 6, paddingVertical: 2 }]}>
+          <Text style={[st.freeBadgeTxt, { fontSize: 9 }]}>ZDARMA</Text>
+        </View>
+      </LinearGradient>
+      <Text style={{ fontWeight: '700', fontSize: 12, marginTop: 6, color: INK }} numberOfLines={1}>{item.t}</Text>
+      <Text style={{ fontSize: 10, color: SUB }}>{item.km} km • před {item.m} min</Text>
+    </Animated.View>
+  );
+}
+
+function Twinkle({ e, style, delay }) {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(a, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(a, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return (
+    <Animated.Text style={[{ position: 'absolute', fontSize: 20, opacity: a, transform: [{ scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.2] }) }] }, style]}>
+      {e}
+    </Animated.Text>
+  );
+}
+
+function Welcome({ onStart }) {
+  const picks = [0, 4, 2, 8, 1, 10].map((k) => ITEMS[k]);
+  const pos = [
+    { left: 10, top: 20, rot: -8 },
+    { left: W / 2 - 66, top: 0, rot: 4 },
+    { right: 10, top: 30, rot: 9 },
+    { left: 24, top: 190, rot: 6 },
+    { left: W / 2 - 60, top: 170, rot: -5 },
+    { right: 20, top: 200, rot: -10 },
+  ];
+  return (
+    <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
+      <View style={{ height: 360 }}>
+        {picks.map((it, i) => {
+          const { rot, ...p } = pos[i];
+          return <FloatCard key={it.t} item={it} rot={rot} delay={i * 120} style={p} />;
+        })}
+        <Twinkle e="✨" style={{ left: 30, top: 160 }} delay={0} />
+        <Twinkle e="💜" style={{ right: 40, top: 165 }} delay={400} />
+        <Twinkle e="⭐" style={{ left: W / 2 - 10, top: 150 }} delay={800} />
+        <Twinkle e="🎁" style={{ right: 24, top: 6 }} delay={1200} />
+      </View>
+      <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'flex-end' }}>
+        <FadeIn delay={500} style={{ alignItems: 'center' }}>
+          <Logo size={44} />
+          <Text style={[st.h1, { textAlign: 'center', marginTop: 18, fontSize: 30 }]}>Věci zdarma od sousedů</Text>
+          <Text style={[st.sub, { textAlign: 'center' }]}>Najdi, co potřebuješ, a pošli dál, co už nepotřebuješ. Za minutu je hotovo – a na konci tě čeká dárek 🎁</Text>
+        </FadeIn>
+        <FadeIn delay={800} style={{ marginTop: 24 }}>
+          <Button title="Začít" onPress={onStart} />
+        </FadeIn>
       </View>
     </SafeAreaView>
   );
@@ -734,6 +924,58 @@ function GiveImpact({ next, ctx }) {
   );
 }
 
+function GiveWhat({ next, ctx }) {
+  const [sel, setSel] = useState(ctx.data.giveCats || []);
+  const toggle = (c) => setSel(sel.includes(c) ? sel.filter((x) => x !== c) : [...sel, c]);
+  return (
+    <StepLayout
+      title="Co chceš darovat?"
+      subtitle="Vyber klidně víc věcí – podle toho ti pošleme vhodné zájemce."
+      disabled={!sel.length}
+      onNext={() => {
+        ctx.set('giveCats', sel);
+        next();
+      }}
+    >
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {CATEGORIES.map(([e, c], i) => (
+          <FadeIn key={c} delay={60 + i * 40}>
+            <Pressable
+              onPress={() => {
+                tap();
+                toggle(c);
+              }}
+              style={[st.catChip, sel.includes(c) && st.catChipSel]}
+            >
+              <Text style={[st.catTxt, sel.includes(c) && { color: B }]}>{e}  {c}</Text>
+            </Pressable>
+          </FadeIn>
+        ))}
+      </View>
+    </StepLayout>
+  );
+}
+
+function GiveAmount({ next, ctx }) {
+  const [sel, setSel] = useState(ctx.data.amount || null);
+  const opts = [['📦', '1–5 věcí'], ['📦📦', '5–10 věcí'], ['🚚', '10–20 věcí'], ['🏠', 'Stěhuju se – víc než 20']];
+  return (
+    <StepLayout
+      title="Kolik toho chceš poslat dál?"
+      disabled={!sel}
+      onNext={() => {
+        ctx.set('amount', sel);
+        next();
+      }}
+      center
+    >
+      {opts.map(([e, o], i) => (
+        <Option key={o} emoji={e} label={o} selected={sel === o} onPress={() => setSel(o)} delay={100 + i * 70} />
+      ))}
+    </StepLayout>
+  );
+}
+
 function GivePickup({ next, ctx }) {
   const [sel, setSel] = useState(ctx.data.pickup || null);
   const opts = ['Kdykoli dnes', 'Jen večer', 'O víkendu', 'Nejdřív mi napište'];
@@ -762,7 +1004,25 @@ function PinBubble() {
   );
 }
 
+function PopIn({ children, delay = 0 }) {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(a, { toValue: 1, friction: 4, tension: 120, delay, useNativeDriver: true }).start();
+  }, []);
+  return <Animated.View style={{ transform: [{ scale: a }] }}>{children}</Animated.View>;
+}
+
 function NeighborsMap({ next }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const ts = PINS.map((_, i) =>
+      setTimeout(() => {
+        setN(i + 1);
+        tap();
+      }, 600 + i * 450)
+    );
+    return () => ts.forEach(clearTimeout);
+  }, []);
   return (
     <View style={{ flex: 1 }}>
       {MapView ? (
@@ -772,17 +1032,21 @@ function NeighborsMap({ next }) {
           scrollEnabled={false}
           zoomEnabled={false}
         >
-          {PINS.map((p, i) => (
+          {PINS.slice(0, n).map((p, i) => (
             <Marker key={i} coordinate={p}>
-              <PinBubble />
+              <PopIn>
+                <PinBubble />
+              </PopIn>
             </Marker>
           ))}
         </MapView>
       ) : (
         <LinearGradient colors={['#EEF6E8', '#DCEFD3']} style={StyleSheet.absoluteFill}>
-          {PINS.map((p, i) => (
+          {PINS.slice(0, n).map((p, i) => (
             <View key={i} style={{ position: 'absolute', left: 30 + ((i * 97) % (W - 140)), top: 180 + i * 70 }}>
-              <PinBubble />
+              <PopIn>
+                <PinBubble />
+              </PopIn>
             </View>
           ))}
         </LinearGradient>
@@ -794,6 +1058,7 @@ function NeighborsMap({ next }) {
       >
         <FadeIn>
           <Text style={st.h1}>Sousedé v Praze chtějí věci zdarma</Text>
+          <Text style={[st.sub, { color: INK }]}>{n ? `${n} ${n === 1 ? 'zájemce' : n < 5 ? 'zájemci' : 'zájemců'} v okolí 👀` : 'Hledáme kolem tebe…'}</Text>
         </FadeIn>
       </LinearGradient>
       <View style={{ position: 'absolute', left: 24, right: 24, bottom: 0 }}>
@@ -841,7 +1106,61 @@ function GiveSpeed({ next }) {
 const DAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
 const MONTHS = ['ledna', 'února', 'března', 'dubna', 'května', 'června', 'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
 
-function NotifyStep({ next, ctx, msg }) {
+function NotifCard({ msg, depth }) {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(a, { toValue: 1, friction: 6, useNativeDriver: true }).start();
+  }, []);
+  return (
+    <Animated.View
+      style={[
+        st.notif,
+        {
+          position: 'absolute',
+          width: W - 48,
+          marginTop: 0,
+          opacity: Animated.multiply(a, 1 - depth * 0.3),
+          transform: [
+            { translateY: Animated.add(a.interpolate({ inputRange: [0, 1], outputRange: [-40, 0] }), depth * 12) },
+            { scale: 1 - depth * 0.05 },
+          ],
+        },
+      ]}
+    >
+      <AppIcon size={44} />
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text style={{ fontWeight: '700', color: SUB }}>TAKE.IT</Text>
+          <Text style={{ color: SUB }}>{depth === 0 ? 'teď' : `před ${depth} min`}</Text>
+        </View>
+        <Text style={{ fontSize: 15, color: INK, marginTop: 2 }} numberOfLines={2}>{msg}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+function NotifStack({ msgs }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const ts = msgs.map((_, i) =>
+      setTimeout(() => {
+        setN(i + 1);
+        success();
+      }, 400 + i * 1400)
+    );
+    return () => ts.forEach(clearTimeout);
+  }, []);
+  const vis = msgs.slice(0, n).reverse().slice(0, 3);
+  return (
+    <View style={{ width: W - 48, height: 110, marginTop: -26 }}>
+      {vis
+        .map((m, depth) => <NotifCard key={m} msg={m} depth={depth} />)
+        .reverse()}
+    </View>
+  );
+}
+
+function NotifyStep({ next, ctx, msgs }) {
   const [v, setV] = useState(ctx.data.notify ?? 3);
   const now = new Date();
   const date = `${DAYS[now.getDay()]} ${now.getDate()}. ${MONTHS[now.getMonth()]}`;
@@ -869,24 +1188,7 @@ function NotifyStep({ next, ctx, msg }) {
           <Text style={st.lockDate}>{date}</Text>
           <Text style={st.lockTime}>{time}</Text>
         </View>
-        <Animated.View
-          style={[
-            st.notif,
-            {
-              opacity: drop,
-              transform: [{ translateY: drop.interpolate({ inputRange: [0, 1], outputRange: [-30, 0] }) }],
-            },
-          ]}
-        >
-          <AppIcon size={44} />
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ fontWeight: '700', color: SUB }}>TAKE.IT</Text>
-              <Text style={{ color: SUB }}>teď</Text>
-            </View>
-            <Text style={{ fontSize: 15, color: INK, marginTop: 2 }}>{msg}</Text>
-          </View>
-        </Animated.View>
+        <NotifStack msgs={msgs} />
       </View>
       <View style={{ alignItems: 'center', marginTop: 12 }}>
         <Text style={[st.bigNum, { fontSize: 64 }]}>{v === 0 ? '0' : v}</Text>
@@ -904,8 +1206,18 @@ function NotifyStep({ next, ctx, msg }) {
   );
 }
 
-const NotifyGive = (p) => <NotifyStep {...p} msg="Petr si chce vyzvednout tvoji lampu. Domluvte se 👋" />;
-const NotifyTake = (p) => <NotifyStep {...p} msg="Kousek od tebe se právě objevil retro gramofon zdarma!" />;
+const NotifyGive = (p) => (
+  <NotifyStep
+    {...p}
+    msgs={['Jana si chce vyzvednout tvoje knihy 📚', 'Petr chce tvoji lampu. Domluvte se 👋', 'Tvoje pohovka má 3 zájemce! 🔥']}
+  />
+);
+const NotifyTake = (p) => (
+  <NotifyStep
+    {...p}
+    msgs={['Nová věc v okolí: dětské kolo 🚲', 'Kávovar zdarma 600 m od tebe ☕', 'Retro gramofon se právě objevil kousek od tebe!']}
+  />
+);
 
 function Setup({ next, title, items, emoji }) {
   const [p, setP] = useState(0);
@@ -1392,8 +1704,98 @@ function DiscountUnlocked({ count }) {
   );
 }
 
+function GiftStep({ next, ctx }) {
+  const [taps, setTaps] = useState(0);
+  const [open, setOpen] = useState(false);
+  const shake = useRef(new Animated.Value(0)).current;
+  const grow = useRef(new Animated.Value(1)).current;
+  const hint = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(hint, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(hint, { toValue: 0, duration: 600, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  const onTap = () => {
+    if (open) return;
+    const t = taps + 1;
+    setTaps(t);
+    try {
+      Haptics.impactAsync(t < 3 ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    } catch (e) {}
+    shake.setValue(0);
+    Animated.sequence([
+      Animated.timing(shake, { toValue: 1, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -1, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 1, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 0, duration: 60, useNativeDriver: true }),
+    ]).start();
+    Animated.spring(grow, { toValue: 1 + t * 0.12, friction: 4, useNativeDriver: true }).start();
+    if (t >= 3) {
+      setTimeout(() => {
+        setOpen(true);
+        success();
+        ctx.set('welcomeGift', true);
+        ctx.addPoints(100);
+      }, 250);
+    }
+  };
+  const rewards = [
+    ['🌱', 'Odznak Nováček', 'Za to, že jsi s námi od začátku'],
+    ['⭐', '+100 bodů dobra', 'Sbírej body za darování a předávání'],
+    ['💜', 'Uvítací sleva −20 %', 'Na první období TAKE.IT Plus'],
+  ];
+  return (
+    <StepLayout
+      title={open ? 'Tvůj dárek za stažení 🎉' : 'Máme pro tebe dárek'}
+      subtitle={open ? 'Díky, že jsi tady. Tohle všechno je tvoje:' : 'Díky, že sis TAKE.IT stáhl. Ťukni 3× na dárek a otevři ho.'}
+      cta={open ? 'Super, pokračovat' : null}
+      onNext={next}
+    >
+      {!open ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable onPress={onTap}>
+            <Animated.Text
+              style={{
+                fontSize: 150,
+                transform: [
+                  { scale: grow },
+                  { rotate: shake.interpolate({ inputRange: [-1, 1], outputRange: ['-12deg', '12deg'] }) },
+                ],
+              }}
+            >
+              🎁
+            </Animated.Text>
+          </Pressable>
+          <Animated.Text style={[st.h2, { marginTop: 30, color: B, opacity: hint.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }]}>
+            {taps === 0 ? 'Ťukni na dárek 👆' : `Ještě ${3 - taps}×…`}
+          </Animated.Text>
+        </View>
+      ) : (
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          {rewards.map(([e, t, d], i) => (
+            <FadeIn key={t} delay={300 + i * 250} style={st.rewardRow}>
+              <View style={st.rewardIcon}>
+                <Text style={{ fontSize: 28 }}>{e}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={st.h2}>{t}</Text>
+                <Text style={st.chartAxis}>{d}</Text>
+              </View>
+            </FadeIn>
+          ))}
+        </View>
+      )}
+      <Confetti run={open} />
+    </StepLayout>
+  );
+}
+GiftStep.noPoints = true;
+
 const SetupGiveWrap = SetupGive;
-const GIVE_STEPS = [GiveReason, GiveImpact, GivePickup, NeighborsMap, GiveSpeed, DonorPerks, NotifyGive, SetupGiveWrap, FirstItem];
+const GIVE_STEPS = [GiveReason, GiveImpact, GiveWhat, GiveAmount, GivePickup, NeighborsMap, GiveSpeed, DonorPerks, NotifyGive, SetupGiveWrap, GiftStep, FirstItem];
 
 function Given({ ctx, onContinue, onRestart }) {
   const item = ctx.myItems[ctx.myItems.length - 1];
@@ -1628,7 +2030,7 @@ function Paywall({ visible, onClose, onUnlock, discount = 0 }) {
               <Text style={[st.sub, { textAlign: 'center' }]}>Nejlepší věci zmizí rychle. Buď u nich první.</Text>
               {discount ? (
                 <View style={[st.discountPill, { marginTop: 14 }]}>
-                  <Text style={{ color: '#fff', fontWeight: '800' }}>🎁 Sleva pro dárce −{discount} % je započítaná</Text>
+                  <Text style={{ color: '#fff', fontWeight: '800' }}>🎁 Tvoje sleva −{discount} % je započítaná</Text>
                 </View>
               ) : (
                 <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 12 }]}>
@@ -1694,7 +2096,8 @@ function LockedOverlay({ ctx, onUnlock, onSkip }) {
   const glow = useRef(new Animated.Value(0)).current;
   const [idx, setIdx] = useState(0);
   const fade = useRef(new Animated.Value(1)).current;
-  const disc = discountFor(ctx.myItems.length);
+  const di = discInfo(ctx);
+  const disc = di.pct;
   useEffect(() => {
     Animated.spring(sheet, { toValue: 1, friction: 8, tension: 40, delay: 500, useNativeDriver: true }).start();
     Animated.loop(Animated.timing(marquee, { toValue: 1, duration: 9000, easing: Easing.linear, useNativeDriver: true })).start();
@@ -1747,7 +2150,7 @@ function LockedOverlay({ ctx, onUnlock, onSkip }) {
         </View>
         {disc ? (
           <View style={[st.discountPill, { alignSelf: 'center', marginTop: 14 }]}>
-            <Text style={{ color: '#fff', fontWeight: '800' }}>🎁 Máš slevu −{disc} % jako dárce</Text>
+            <Text style={{ color: '#fff', fontWeight: '800' }}>🎁 Máš slevu −{disc} % ({di.label})</Text>
           </View>
         ) : (
           <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 12 }]}>💡 Daruj věc a získáš slevu až −60 %</Text>
@@ -1777,7 +2180,7 @@ function LockedFeed({ next, ctx }) {
       </View>
       <Paywall
         visible={pay}
-        discount={discountFor(ctx.myItems.length)}
+        discount={discInfo(ctx).pct}
         onClose={() => setPay(false)}
         onUnlock={(pl) => {
           setPay(false);
@@ -1789,7 +2192,7 @@ function LockedFeed({ next, ctx }) {
   );
 }
 
-const TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, NotifyTake, SetupTake, LockedFeed];
+const TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, NotifyTake, SetupTake, GiftStep, LockedFeed];
 
 // ---------- Hlavní appka (záložky) ----------
 function Header({ title, right }) {
@@ -1910,7 +2313,7 @@ function HomeTab({ ctx }) {
     ),
   ];
   const current = open ? items.find((x) => (x.id || x.t) === (open.id || open.t)) || null : null;
-  const disc = discountFor(ctx.myItems.length);
+  const disc = discInfo(ctx).pct;
   return (
     <View style={{ flex: 1 }}>
       <Header />
@@ -2137,7 +2540,8 @@ function ProfileTab({ ctx, onRestart }) {
   const gotItems = ITEMS.filter((x) => ctx.outReq[x.t] === 'accepted');
   const got = gotItems.length;
   const saved = gotItems.reduce((sum, x) => sum + x.v, 0);
-  const disc = discountFor(given);
+  const di = discInfo(ctx);
+  const disc = di.pct;
   const plus = ctx.data.unlocked;
   const planName = { year: 'Roční', month: 'Měsíční', week: 'Týdenní' }[ctx.data.plan] || 'Roční';
   const renew = new Date((ctx.data.planAt || Date.now()) + ({ year: 365, month: 30, week: 7 }[ctx.data.plan] || 365) * 864e5);
@@ -2164,6 +2568,9 @@ function ProfileTab({ ctx, onRestart }) {
             </View>
           ) : null}
           <Text style={[st.chartAxis, { marginTop: 6 }]}>📍 Praha • na TAKE.IT od dneška</Text>
+          <View style={[st.pointsPill, { marginTop: 10 }]}>
+            <Text style={{ fontWeight: '900', color: B }}>⭐ {ctx.points} bodů dobra</Text>
+          </View>
         </View>
         <View style={{ flexDirection: 'row', marginTop: 20 }}>
           {[
@@ -2180,6 +2587,21 @@ function ProfileTab({ ctx, onRestart }) {
         <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 8, fontSize: 12 }]}>
           ♻️ ~{(given + got) * 8} kg věcí mimo skládku • ušetřeno = odhad ceny z bazaru
         </Text>
+
+        <Text style={st.section}>Odznaky</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          {[
+            ['🌱', 'Nováček', !!ctx.data.welcomeGift],
+            ['🎁', 'První dar', given >= 1],
+            ['🤝', 'Dobrý soused', ctx.myItems.some((x) => x.status === 'given')],
+            ['🔎', 'Lovec pokladů', got >= 1],
+          ].map(([e, l, on]) => (
+            <View key={l} style={[st.badgeBox, !on && { opacity: 0.35 }]}>
+              <Text style={{ fontSize: 30 }}>{on ? e : '🔒'}</Text>
+              <Text style={[st.chartAxis, { color: on ? INK : SUB, fontWeight: '700', textAlign: 'center' }]}>{l}</Text>
+            </View>
+          ))}
+        </View>
 
         <Text style={st.section}>TAKE.IT Plus</Text>
         {plus ? (
@@ -2231,7 +2653,7 @@ function ProfileTab({ ctx, onRestart }) {
         <View style={st.chartCard}>
           <Text style={st.h2}>{ctx.data.unlocked ? '✅ Aktivní' : 'Neaktivní'}</Text>
           <Text style={st.chartAxis}>
-            {disc ? `Tvoje sleva pro dárce: −${disc} %` : 'Daruj první věc a získáš −20 %'}
+            {disc ? `Tvoje sleva: −${disc} % (${di.label})` : 'Daruj první věc a získáš −20 %'}
             {nextTier(given) ? ` • další stupeň za ${nextTier(given).n - given} ${nextTier(given).n - given === 1 ? 'věc' : 'věci'}` : ''}
           </Text>
           <Button title="Aktivovat" style={{ marginTop: 12, marginBottom: 0 }} onPress={() => setPay(true)} />
@@ -2372,7 +2794,8 @@ const NEIGHBORS = [
 ];
 
 function Root() {
-  const [route, setRoute] = useState('intro');
+  const [route, setRoute] = useState('welcome');
+  const [points, setPoints] = useState(0);
   const [tab, setTab] = useState('home');
   const [data, setData] = useState({});
   const [myItems, setMyItems] = useState([]);
@@ -2412,6 +2835,8 @@ function Root() {
   const ctx = {
     data,
     set: (k, v) => setData((d) => ({ ...d, [k]: v })),
+    points,
+    addPoints: (n) => setPoints((p) => p + n),
     myItems,
     requests,
     outReq,
@@ -2427,6 +2852,7 @@ function Root() {
     addItem: (it) => {
       const id = 'my' + Date.now();
       setMyItems((xs) => [...xs, { ...it, id, status: 'active', views: 0, at: Date.now() }]);
+      setPoints((p) => p + 50);
       later(() => setMyItems((xs) => xs.map((x) => (x.id === id ? { ...x, views: x.views + 7 } : x))), 3000);
       NEIGHBORS.forEach((n) =>
         later(() => {
@@ -2454,8 +2880,9 @@ function Root() {
     decline: (rid) => setRequests((rs) => rs.map((x) => (x.id === rid ? { ...x, status: 'declined' } : x))),
     markGiven: (id) => {
       setMyItems((xs) => xs.map((x) => (x.id === id ? { ...x, status: 'given' } : x)));
+      setPoints((p) => p + 100);
       success();
-      setToast({ title: 'Předáno ✅', body: 'Díky, že posíláš věci dál! 💜' });
+      setToast({ title: 'Předáno ✅ +100 ⭐', body: 'Díky, že posíláš věci dál! Odemkl sis odznak Dobrý soused 🤝' });
     },
     deleteItem: (id) => {
       setMyItems((xs) => xs.filter((x) => x.id !== id));
@@ -2476,16 +2903,18 @@ function Root() {
     timers.current.forEach(clearTimeout);
     timers.current = [];
     setData({});
+    setPoints(0);
     setMyItems([]);
     setRequests([]);
     setOutReq({});
     setAddOpen(false);
     setTab('home');
-    setRoute('intro');
+    setRoute('welcome');
   };
 
   let screen;
-  if (route === 'intro') screen = <Intro onPick={setRoute} />;
+  if (route === 'welcome') screen = <Welcome onStart={() => setRoute('intro')} />;
+  else if (route === 'intro') screen = <Intro onPick={setRoute} />;
   else if (route === 'give')
     screen = <Flow key="give" steps={GIVE_STEPS} ctx={ctx} onExit={() => setRoute('intro')} onFinish={() => setRoute('given')} />;
   else if (route === 'given')
@@ -2637,6 +3066,12 @@ const st = StyleSheet.create({
     padding: 14,
   },
   photoThumb: { width: 110, height: 110, borderRadius: 16, marginRight: 10 },
+  optCheck: { position: 'absolute', right: 16, top: '50%', marginTop: 1, width: 22, height: 22, borderRadius: 11, backgroundColor: B, alignItems: 'center', justifyContent: 'center' },
+  pointsPill: { backgroundColor: B_LIGHT, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
+  floatCard: { position: 'absolute', width: 126, backgroundColor: '#fff', borderRadius: 18, padding: 8, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
+  rewardRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 20, padding: 14, marginBottom: 12 },
+  rewardIcon: { width: 54, height: 54, borderRadius: 16, backgroundColor: B_LIGHT, alignItems: 'center', justifyContent: 'center' },
+  badgeBox: { width: (W - 48 - 24) / 4, backgroundColor: CARD, borderRadius: 16, paddingVertical: 12, alignItems: 'center', marginBottom: 8 },
   mapPin: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#fff', borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 5 },
   mapPinTip: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#fff', marginTop: -1 },
   meDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#0A84FF', borderWidth: 4, borderColor: '#fff', shadowColor: '#0A84FF', shadowOpacity: 0.5, shadowRadius: 8, elevation: 4 },
