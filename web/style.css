@@ -65,12 +65,12 @@ h3 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.01em; }
 .wl.done + .wl-note + .wl-ok, .wl-ok.show { display: block; }
 
 /* Phones */
-.phone { position: relative; width: 280px; aspect-ratio: 390 / 844; border-radius: 46px; background: #111; padding: 10px; box-shadow: 0 30px 60px -20px rgba(42, 16, 96, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.06); flex-shrink: 0; }
-.phone .screen { position: relative; width: 100%; height: 100%; border-radius: 37px; overflow: hidden; background: #fff; }
+.phone { position: relative; width: 280px; border-radius: 16% / 7.4%; background: #111; padding: 10px; box-shadow: 0 30px 60px -20px rgba(42, 16, 96, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.06); flex-shrink: 0; }
+.phone .screen { position: relative; width: 100%; aspect-ratio: 390 / 844; border-radius: 13.5% / 6.2%; overflow: hidden; background: #fff; }
 .phone .screen img { position: absolute; }
 .phone .screen .ph { object-fit: cover; background: #ece9f3; z-index: 0; }
 .phone .screen .shot { inset: 0; width: 100%; height: 100%; z-index: 1; }
-.phone::before { content: ''; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); width: 84px; height: 24px; border-radius: 14px; background: #111; z-index: 2; }
+.phone::before { content: ''; position: absolute; top: 2.6%; left: 50%; transform: translateX(-50%); width: 30%; aspect-ratio: 84 / 24; border-radius: 999px; background: #111; z-index: 2; }
 .phones { position: relative; height: 620px; }
 .phones .phone { position: absolute; }
 .phones .p1 { left: 4%; top: 30px; transform: rotate(-6deg); z-index: 2; }
