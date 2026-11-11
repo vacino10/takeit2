@@ -75,8 +75,8 @@ h3 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.01em; }
 
 /* Phones */
 .phone {
-  position: relative; width: 280px; flex-shrink: 0;
-  padding: 2.4%;
+  position: relative; --pw: 280px; width: var(--pw); flex-shrink: 0;
+  padding: calc(var(--pw) * 0.022);
   border: 2.5px solid transparent;
   border-radius: 16.5% / 7.7%;
   background: linear-gradient(#0a0a0c, #0a0a0c) padding-box,
@@ -106,11 +106,11 @@ section { padding: 88px 0; }
 .soft { background: var(--bg-soft); }
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 48px; }
 .step { text-align: center; }
-.step .phone { width: 240px; margin: 0 auto 26px; }
+.step .phone { --pw: 240px; margin: 0 auto 26px; }
 .num { display: inline-flex; width: 32px; height: 32px; border-radius: 16px; background: var(--b); color: #fff; font-weight: 800; align-items: center; justify-content: center; margin-bottom: 10px; }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
 .split .phones2 { display: flex; gap: 22px; justify-content: center; align-items: flex-start; }
-.split .phones2 .phone { width: 250px; }
+.split .phones2 .phone { --pw: 250px; }
 .split .phones2 .phone:nth-child(2) { margin-top: 60px; }
 .list { list-style: none; padding: 0; margin: 22px 0 0; }
 .list li { display: flex; gap: 14px; margin-bottom: 18px; }
@@ -171,10 +171,10 @@ footer small { color: var(--sub); }
   .hero { padding-top: 36px; }
   .hero .wrap, .split { grid-template-columns: 1fr; }
   .phones { height: 470px; max-width: 420px; margin: 0 auto; width: 100%; }
-  .phones .phone { width: 210px; }
+  .phones .phone { --pw: 210px; }
   .steps, .cards { grid-template-columns: 1fr; }
-  .step .phone { width: 210px; }
-  .split .phones2 .phone { width: 44%; max-width: 210px; }
+  .step .phone { --pw: 210px; }
+  .split .phones2 .phone { --pw: min(44vw, 210px); }
   .split .order-first { order: -1; }
   section { padding: 64px 0; }
   .wl { flex-direction: column; }
