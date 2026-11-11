@@ -102,6 +102,14 @@ var updateName = async function updateName(uid, name) {
   if (error) throw error;
 }
 
+var updateAbout = async function updateAbout(uid, about, reasons) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ about: (about || '').slice(0, 300), take_reasons: (reasons || []).slice(0, 6) })
+    .eq('id', uid);
+  if (error) throw error;
+}
+
 var claimWelcome = async function claimWelcome() {
   await supabase.rpc('claim_welcome');
 }
@@ -204,7 +212,7 @@ var fetchOutgoing = async function fetchOutgoing(uid) {
 var fetchIncoming = async function fetchIncoming(uid) {
   const { data, error } = await supabase
     .from('requests')
-    .select('id, status, message, created_at, item_id, requester:profiles(id, name), item:items!inner(id, title, owner_id, photos)')
+    .select('id, status, message, created_at, item_id, requester:profiles(id, name, about, take_reasons), item:items!inner(id, title, owner_id, photos)')
     .eq('item.owner_id', uid)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -277,7 +285,7 @@ var publicStats = async function publicStats() {
   return data;
 }
 
-var api = { appleAvailable, signInWithApple, signOut, deleteAccount, getProfile, updateName, claimWelcome, getMyContact, saveContact, fetchFeed, fetchMyItems, createItem, deleteItem, markGiven, incrementView, requestItem, fetchOutgoing, fetchIncoming, acceptRequest, declineRequest, getContact, reportItem, blockUser, registerPush, fetchNotifications, markNotificationsRead, publicStats };
+var api = { appleAvailable, signInWithApple, signOut, deleteAccount, getProfile, updateName, updateAbout, claimWelcome, getMyContact, saveContact, fetchFeed, fetchMyItems, createItem, deleteItem, markGiven, incrementView, requestItem, fetchOutgoing, fetchIncoming, acceptRequest, declineRequest, getContact, reportItem, blockUser, registerPush, fetchNotifications, markNotificationsRead, publicStats };
 
 // ---------- Brand ----------
 var B = '#7028E8';
@@ -296,6 +304,14 @@ var impact = (style = 'Light') => {
 };
 var success = () => {
   try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch (e) {}
+};
+// Delší haptika: série jemných impulzů po dobu animace (sílí ke konci), na konci volitelně „success“
+var rumble = (ms = 800, { every = 70, from = 'Light', to = 'Medium', end = null, delay = 0 } = {}) => {
+  const n = Math.max(1, Math.round(ms / every));
+  const timers = [];
+  for (let i = 0; i < n; i++) timers.push(setTimeout(() => impact(i < n * 0.65 ? from : to), delay + i * every));
+  if (end) timers.push(setTimeout(() => (end === 'success' ? success() : impact(end)), delay + ms));
+  return () => timers.forEach(clearTimeout);
 };
 var kc = (n) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
@@ -324,6 +340,16 @@ var IconLine = ({ icon, text, color = SUB, style, bold }) => (
     <Text style={[st.chartAxis, { marginLeft: 6, flex: 1, color }, bold && { fontWeight: '700' }]}>{text}</Text>
   </View>
 );
+// Proč někdo hledá věci zdarma (ukáže se dárci u žádosti)
+var TAKE_REASONS = [
+  ['home-outline', 'Zařizuju nové bydlení', '🏠'],
+  ['happy-outline', 'Mám malé děti', '👶'],
+  ['school-outline', 'Jsem student', '🎓'],
+  ['wallet-outline', 'Potřebuju ušetřit', '💸'],
+  ['leaf-outline', 'Nechci kupovat nové', '♻️'],
+  ['people-outline', 'Sháním pro někoho jiného', '🤝'],
+];
+var reasonIcon = (l) => (TAKE_REASONS.find((r) => r[1] === l) || ['heart-outline'])[0];
 var catEmoji = (c) => (CATEGORIES.find((x) => x[1] === c) || ['🎁'])[0];
 
 // Ukázkové věci jen pro úvodní obrazovku (ilustrace)
@@ -575,10 +601,12 @@ var Confetti = function Confetti({ run, count = 28 }) {
   ).current;
   useEffect(() => {
     if (!run) return;
+    const stop = rumble(520, { every: 55, from: 'Medium', to: 'Light' });
     Animated.stagger(
-      12,
-      parts.map((p) => Animated.timing(p.a, { toValue: 1, duration: 1500, easing: Easing.out(Easing.quad), useNativeDriver: true }))
+      14,
+      parts.map((p) => Animated.timing(p.a, { toValue: 1, duration: 2100, easing: Easing.out(Easing.quad), useNativeDriver: true }))
     ).start();
+    return stop;
   }, [run]);
   if (!run) return null;
   return (
@@ -617,7 +645,8 @@ var PointsPill = function PointsPill({ points }) {
     bump.setValue(1.3);
     Animated.spring(bump, { toValue: 1, friction: 3, useNativeDriver: true }).start();
     fly.setValue(0);
-    Animated.timing(fly, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    rumble(260, { every: 65, from: 'Light', to: 'Medium', end: 'Medium' });
+    Animated.timing(fly, { toValue: 1, duration: 1300, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [points]);
   return (
     <View style={{ marginLeft: 10 }}>
@@ -762,7 +791,7 @@ var Grid = function Grid({ items, onItem }) {
 }
 
 
-// ---------- Taki – průvodce ----------
+// ---------- Taki – průvodce (krokodýl) ----------
 // mood: happy | wow | wink | excited | think
 var Taki = function Taki({ size = 120, mood = 'happy', wave = false, jump = 0 }) {
   const bob = useRef(new Animated.Value(0)).current;
@@ -801,6 +830,7 @@ var Taki = function Taki({ size = 120, mood = 'happy', wave = false, jump = 0 })
   }, [wave]);
   useEffect(() => {
     if (!jump) return;
+    impact('Soft');
     hop.setValue(0);
     Animated.sequence([
       Animated.timing(hop, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }),
@@ -808,33 +838,47 @@ var Taki = function Taki({ size = 120, mood = 'happy', wave = false, jump = 0 })
     ]).start();
   }, [jump]);
   const k = size / 120;
-  // Taki: buclatý „gumídek“ složený z obyčejných tvarů (bez SVG), mřížka 120 × 140
+  // Taki: roztomilý krokodýl složený z obyčejných tvarů (bez SVG), mřížka 120 × 140
   const box = (x, y, w, h, extra) => ({ position: 'absolute', left: x * k, top: y * k, width: w * k, height: h * k, ...extra });
-  const DARK = '#6A35DA';
-  const INKY = '#1E1240';
-  const MINT = '#7DE3B8';
+  const G = '#5BCB8F';
+  const GD = '#2E9B66';
+  const SNOUT = '#7EDCAA';
+  const CREAM = '#FFF1C2';
+  const M = '#1D5B3D';
   const arc = (x, y, w, h, color, thick) => (
     <View style={box(x, y, w, h, { borderBottomWidth: thick * k, borderLeftWidth: thick * 0.6 * k, borderRightWidth: thick * 0.6 * k, borderColor: color, borderBottomLeftRadius: w * k, borderBottomRightRadius: w * k, borderTopWidth: 0 })} />
   );
-  const lookY = mood === 'think' ? -3 : 0;
+  const tooth = (x, y, key) => (
+    <View key={key} style={{ position: 'absolute', left: x * k, top: y * k, width: 0, height: 0, borderLeftWidth: 3 * k, borderRightWidth: 3 * k, borderTopWidth: 5 * k, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#FFFFFF' }} />
+  );
+  const ly = mood === 'think' ? -3 : 0;
   const eye = (cx, closed) =>
     closed ? (
-      arc(cx - 7, 66, 14, 7, INKY, 3.5)
+      arc(cx - 7, 15, 14, 7, M, 3)
     ) : (
       <>
-        <View style={box(cx - 5.5, 60 + lookY, 11, mood === 'wow' ? 16 : 14, { backgroundColor: INKY, borderRadius: 6 * k })} />
-        <View style={box(cx - 2, 62 + lookY, 4, 4, { backgroundColor: '#FFFFFF', borderRadius: 2 * k })} />
+        <View style={box(cx - 4.5, (mood === 'wow' ? 13 : 14) + ly, 9, mood === 'wow' ? 13 : 11, { backgroundColor: '#14301F', borderRadius: 5 * k })} />
+        <View style={box(cx - 2, 15.5 + ly, 3.5, 3.5, { backgroundColor: '#FFFFFF', borderRadius: 2 * k })} />
       </>
     );
-  let mouth = arc(53, 79, 14, 7, INKY, 3);
-  if (mood === 'wow') mouth = <View style={box(55, 80, 10, 11, { backgroundColor: INKY, borderRadius: 6 * k })} />;
+  let mouth = (
+    <>
+      {arc(30, 58, 60, 13, M, 3)}
+      {[[38, 64], [48, 68], [66, 68], [76, 64]].map(([x, y], i) => tooth(x, y, 't' + i))}
+    </>
+  );
+  if (mood === 'wow') mouth = <View style={box(54, 62, 12, 12, { backgroundColor: M, borderRadius: 6 * k })} />;
   if (mood === 'excited')
     mouth = (
-      <View style={box(51, 79, 18, 11, { backgroundColor: INKY, borderBottomLeftRadius: 10 * k, borderBottomRightRadius: 10 * k, overflow: 'hidden' })}>
-        <View style={{ position: 'absolute', left: 4 * k, top: 6 * k, width: 10 * k, height: 7 * k, borderRadius: 5 * k, backgroundColor: '#FF8FB1' }} />
-      </View>
+      <>
+        <View style={box(38, 61, 44, 15, { backgroundColor: M, borderBottomLeftRadius: 14 * k, borderBottomRightRadius: 14 * k, overflow: 'hidden' })}>
+          <View style={{ position: 'absolute', left: 12 * k, top: 8 * k, width: 20 * k, height: 10 * k, borderRadius: 6 * k, backgroundColor: '#FF8FB1' }} />
+        </View>
+        {tooth(45, 61, 'e1')}
+        {tooth(69, 61, 'e2')}
+      </>
     );
-  if (mood === 'think') mouth = <View style={box(54, 83, 12, 3, { backgroundColor: INKY, borderRadius: 2 * k, transform: [{ rotate: '-8deg' }] })} />;
+  if (mood === 'think') mouth = <View style={box(48, 66, 24, 3, { backgroundColor: M, borderRadius: 2 * k, transform: [{ rotate: '-6deg' }] })} />;
   return (
     <Animated.View
       style={{
@@ -847,41 +891,58 @@ var Taki = function Taki({ size = 120, mood = 'happy', wave = false, jump = 0 })
       }}
     >
       {/* stín */}
-      <View style={box(24, 129, 72, 9, { backgroundColor: 'rgba(17,17,17,0.10)', borderRadius: 36 * k })} />
-      {/* tykadlo s mentolovou kuličkou */}
-      <View style={box(58, 12, 4, 22, { backgroundColor: DARK, borderRadius: 2 * k, transform: [{ rotate: '8deg' }] })} />
-      <View style={box(55, 3, 15, 15, { backgroundColor: MINT, borderRadius: 8 * k })} />
-      <View style={box(58, 6, 5, 4, { backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 3 * k })} />
+      <View style={box(26, 129, 68, 9, { backgroundColor: 'rgba(17,17,17,0.10)', borderRadius: 34 * k })} />
+      {/* ocásek s hřebínkem */}
+      {[[89, 96], [96, 92.6], [103, 89]].map(([x, y], i) => (
+        <View key={'s' + i} style={box(x, y, 7, 7, { backgroundColor: GD, borderRadius: 2 * k, transform: [{ rotate: '17deg' }] })} />
+      ))}
+      <View style={box(78, 98, 40, 16, { backgroundColor: GD, borderRadius: 8 * k, transform: [{ rotate: '-28deg' }] })} />
       {/* nožky */}
-      <View style={box(33, 114, 22, 16, { backgroundColor: DARK, borderRadius: 9 * k })} />
-      <View style={box(65, 114, 22, 16, { backgroundColor: DARK, borderRadius: 9 * k })} />
+      <View style={box(34, 116, 22, 14, { backgroundColor: GD, borderRadius: 7 * k })} />
+      <View style={box(64, 116, 22, 14, { backgroundColor: GD, borderRadius: 7 * k })} />
       {/* levá ručka */}
-      <View style={box(7, 70, 17, 34, { backgroundColor: '#8F5CF2', borderRadius: 9 * k, transform: [{ rotate: '16deg' }] })} />
-      {/* tělo – gumídek */}
-      <View style={box(14, 26, 92, 96, { borderTopLeftRadius: 46 * k, borderTopRightRadius: 46 * k, borderBottomLeftRadius: 34 * k, borderBottomRightRadius: 34 * k, overflow: 'hidden' })}>
-        <LinearGradient colors={['#CDB8FF', '#A57BFA', '#8A52F0']} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={{ flex: 1 }} />
-        <View style={{ position: 'absolute', left: 14 * k, top: 12 * k, width: 26 * k, height: 16 * k, borderRadius: 13 * k, backgroundColor: 'rgba(255,255,255,0.45)', transform: [{ rotate: '-25deg' }] }} />
-        {/* bříško */}
-        <View style={{ position: 'absolute', left: 30 * k, top: 66 * k, width: 32 * k, height: 20 * k, borderRadius: 16 * k, backgroundColor: 'rgba(255,255,255,0.12)' }} />
+      <View style={box(17, 82, 14, 26, { backgroundColor: G, borderRadius: 7 * k, transform: [{ rotate: '22deg' }] })} />
+      {/* tělo a bříško */}
+      <View style={box(28, 70, 64, 54, { borderRadius: 26 * k, overflow: 'hidden' })}>
+        <LinearGradient colors={['#6FD9A0', '#3FB37A']} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={{ flex: 1 }} />
       </View>
-      {eye(48, blink)}
-      {eye(72, blink || mood === 'wink')}
-      <View style={box(30, 74, 13, 8, { backgroundColor: 'rgba(255,143,177,0.8)', borderRadius: 6 * k })} />
-      <View style={box(77, 74, 13, 8, { backgroundColor: 'rgba(255,143,177,0.8)', borderRadius: 6 * k })} />
+      <View style={box(40, 80, 40, 40, { backgroundColor: CREAM, borderRadius: 20 * k })} />
+      <View style={box(46, 92, 28, 2.5, { backgroundColor: 'rgba(180,140,40,0.25)', borderRadius: 2 * k })} />
+      <View style={box(46, 103, 28, 2.5, { backgroundColor: 'rgba(180,140,40,0.25)', borderRadius: 2 * k })} />
+      {/* oči na hlavě */}
+      <View style={box(24, 4, 32, 30, { backgroundColor: '#6AD69C', borderRadius: 16 * k })} />
+      <View style={box(64, 4, 32, 30, { backgroundColor: '#6AD69C', borderRadius: 16 * k })} />
+      {/* hlava */}
+      <View style={box(14, 18, 92, 64, { borderRadius: 32 * k, overflow: 'hidden' })}>
+        <LinearGradient colors={['#74DCA4', '#4CBF84']} start={{ x: 0.3, y: 0 }} end={{ x: 0.6, y: 1 }} style={{ flex: 1 }} />
+      </View>
+      {[[52, 22], [62, 22], [57, 28]].map(([x, y], i) => (
+        <View key={'p' + i} style={box(x, y, 6, 4, { backgroundColor: 'rgba(30,110,70,0.25)', borderRadius: 3 * k })} />
+      ))}
+      <View style={box(30, 9, 20, 20, { backgroundColor: '#FFFFFF', borderRadius: 10 * k })} />
+      <View style={box(70, 9, 20, 20, { backgroundColor: '#FFFFFF', borderRadius: 10 * k })} />
+      {eye(40, blink)}
+      {eye(80, blink || mood === 'wink')}
+      {/* čumák */}
+      <View style={box(18, 44, 84, 38, { backgroundColor: SNOUT, borderRadius: 19 * k })} />
+      <View style={box(46, 50, 6, 4, { backgroundColor: M, borderRadius: 3 * k, opacity: 0.7 })} />
+      <View style={box(68, 50, 6, 4, { backgroundColor: M, borderRadius: 3 * k, opacity: 0.7 })} />
+      <View style={box(16, 56, 13, 8, { backgroundColor: 'rgba(255,143,177,0.75)', borderRadius: 6 * k })} />
+      <View style={box(91, 56, 13, 8, { backgroundColor: 'rgba(255,143,177,0.75)', borderRadius: 6 * k })} />
       {mouth}
       {/* pravá ručka (mává) */}
       <Animated.View
         style={{
           position: 'absolute',
-          left: 97 * k,
-          top: 70 * k,
-          width: 17 * k,
-          height: 34 * k,
+          left: 89 * k,
+          top: 80 * k,
+          width: 14 * k,
+          height: 26 * k,
           transformOrigin: 'top',
-          transform: [{ rotate: wave ? arm.interpolate({ inputRange: [-1, 1], outputRange: ['-150deg', '-115deg'] }) : '-16deg' }],
+          transform: [{ rotate: wave ? arm.interpolate({ inputRange: [-1, 1], outputRange: ['-150deg', '-115deg'] }) : '-22deg' }],
         }}
       >
-        <View style={{ flex: 1, borderRadius: 9 * k, backgroundColor: '#8F5CF2' }} />
+        <View style={{ flex: 1, borderRadius: 7 * k, backgroundColor: G }} />
       </Animated.View>
     </Animated.View>
   );
@@ -1175,11 +1236,13 @@ var ClearAnim = function ClearAnim() {
   const anims = useRef(items.map(() => new Animated.Value(0))).current;
   const sparkle = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    const stops = anims.map((_, i) => rumble(320, { every: 60, from: 'Light', to: 'Medium', end: 'Rigid', delay: 600 + i * 380 + 480 }));
     Animated.sequence([
-      Animated.delay(500),
-      Animated.stagger(220, anims.map((a) => Animated.timing(a, { toValue: 1, duration: 600, easing: Easing.in(Easing.cubic), useNativeDriver: true }))),
+      Animated.delay(600),
+      Animated.stagger(380, anims.map((a) => Animated.timing(a, { toValue: 1, duration: 800, easing: Easing.in(Easing.cubic), useNativeDriver: true }))),
       Animated.spring(sparkle, { toValue: 1, friction: 5, useNativeDriver: true }),
     ]).start(() => success());
+    return () => stops.forEach((f) => f());
   }, []);
   return (
     <View style={[st.chartCard, { height: 240, justifyContent: 'center' }]}>
@@ -1479,10 +1542,16 @@ var GiveSpeed = function GiveSpeed({ next }) {
   const a = useRef(new Animated.Value(0)).current;
   const b = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.stagger(350, [
-      Animated.timing(a, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-      Animated.timing(b, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-    ]).start(() => success());
+    const stop1 = rumble(1300, { every: 85, from: 'Light', to: 'Light' });
+    const stop2 = rumble(900, { every: 70, from: 'Light', to: 'Medium', delay: 550, end: 'success' });
+    Animated.stagger(550, [
+      Animated.timing(a, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(b, { toValue: 1, duration: 950, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    ]).start();
+    return () => {
+      stop1();
+      stop2();
+    };
   }, []);
   return (
     <StepLayout
@@ -1632,9 +1701,10 @@ var Setup = function Setup({ next, title, items, emoji }) {
   useEffect(() => {
     const a = new Animated.Value(0);
     const id = a.addListener(({ value }) => setP(Math.round(value)));
-    Animated.timing(a, { toValue: 100, duration: 4200, easing: Easing.inOut(Easing.quad), useNativeDriver: false }).start(() => {
+    const stop = rumble(5000, { every: 150, from: 'Light', to: 'Medium' });
+    Animated.timing(a, { toValue: 100, duration: 5200, easing: Easing.inOut(Easing.quad), useNativeDriver: false }).start(() => {
       success();
-      setTimeout(next, 500);
+      setTimeout(next, 800);
     });
     Animated.loop(
       Animated.sequence([
@@ -1642,12 +1712,15 @@ var Setup = function Setup({ next, title, items, emoji }) {
         Animated.timing(bounce, { toValue: 0, duration: 600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ])
     ).start();
-    return () => a.removeListener(id);
+    return () => {
+      a.removeListener(id);
+      stop();
+    };
   }, []);
   const per = 100 / items.length;
   const doneCount = Math.floor(p / per);
   useEffect(() => {
-    if (doneCount > 0) impact('Light');
+    if (doneCount > 0) impact('Heavy');
   }, [doneCount]);
   return (
     <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
@@ -1793,19 +1866,20 @@ var GiftStep = function GiftStep({ next, ctx }) {
     } catch (e) {}
     shake.setValue(0);
     Animated.sequence([
-      Animated.timing(shake, { toValue: 1, duration: 60, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: -1, duration: 60, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: 1, duration: 60, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: 0, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 1, duration: 85, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -1, duration: 85, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 1, duration: 85, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 0, duration: 85, useNativeDriver: true }),
     ]).start();
     Animated.spring(grow, { toValue: 1 + t * 0.12, friction: 4, useNativeDriver: true }).start();
+    rumble(t < 3 ? 240 : 650, { every: t < 3 ? 60 : 45, from: 'Medium', to: t < 3 ? 'Medium' : 'Heavy' });
     if (t >= 3) {
       setTimeout(() => {
         setOpen(true);
         success();
         ctx.set('welcomeGift', true);
         ctx.addPoints(100);
-      }, 250);
+      }, 700);
     }
   };
   const rewards = [
@@ -1862,6 +1936,78 @@ GiftStep.noPoints = true;
 
 
 // ---------- CHCI ZDARMA ----------
+var AboutEditor = function AboutEditor({ reasons, setReasons, about, setAbout, emoji }) {
+  const toggle = (l) => {
+    impact('Light');
+    setReasons(reasons.includes(l) ? reasons.filter((x) => x !== l) : [...reasons, l]);
+  };
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {TAKE_REASONS.map(([ic, l, e], i) => {
+          const on = reasons.includes(l);
+          return (
+            <FadeIn key={l} delay={emoji ? i * 70 : 0}>
+              <Pressable onPress={() => toggle(l)} style={[st.reasonChip, on && st.reasonChipOn]}>
+                {emoji ? <Text style={{ fontSize: 16 }}>{e}</Text> : <Ionicons name={ic} size={16} color={on ? B : INK} />}
+                <Text style={[st.reasonTxt, on && { color: B }]}>{l}</Text>
+              </Pressable>
+            </FadeIn>
+          );
+        })}
+      </View>
+      <Text style={[st.label, { marginTop: 18 }]}>Pár slov o sobě <Text style={{ color: SUB, fontWeight: '500' }}>(nepovinné)</Text></Text>
+      <TextInput
+        value={about}
+        onChangeText={(t) => setAbout(t.slice(0, 300))}
+        placeholder="Např. Jsem Petra, se dvěma dětmi se stěhujeme do Brna a zařizujeme byt od nuly."
+        placeholderTextColor="#A9A9AE"
+        multiline
+        style={st.aboutInput}
+      />
+      <Text style={[st.chartAxis, { textAlign: 'right' }]}>{about.length}/300</Text>
+    </View>
+  );
+}
+
+var ReasonChips = function ReasonChips({ reasons, max = 6 }) {
+  if (!reasons || !reasons.length) return null;
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
+      {reasons.slice(0, max).map((l) => (
+        <View key={l} style={st.reasonTag}>
+          <Ionicons name={reasonIcon(l)} size={13} color={B} />
+          <Text style={st.reasonTagTxt}>{l}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+var TakeWhy = function TakeWhy({ next, ctx }) {
+  const [reasons, setReasons] = useState(ctx.data.takeReasons || []);
+  const [about, setAbout] = useState(ctx.data.about || '');
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+      <StepLayout
+        title="Proč hledáš věci zdarma?"
+        subtitle="Dárci to uvidí u tvé žádosti. Lidé radši dávají, když vědí komu."
+        disabled={!reasons.length}
+        onNext={() => {
+          ctx.set('takeReasons', reasons);
+          ctx.set('about', about.trim());
+          success();
+          next();
+        }}
+      >
+        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <AboutEditor reasons={reasons} setReasons={setReasons} about={about} setAbout={setAbout} emoji />
+        </ScrollView>
+      </StepLayout>
+    </KeyboardAvoidingView>
+  );
+}
+
 var TakeCategories = function TakeCategories({ next, ctx }) {
   const [sel, setSel] = useState(ctx.data.cats || []);
   const toggle = (c) => setSel(sel.includes(c) ? sel.filter((x) => x !== c) : [...sel, c]);
@@ -1901,14 +2047,19 @@ var TakeSavings = function TakeSavings({ next }) {
   useEffect(() => {
     const a = new Animated.Value(0);
     const id = a.addListener(({ value }) => setTotal(Math.round(value / 10) * 10));
-    Animated.timing(a, { toValue: sum, duration: 1500, delay: rows.length * 320 + 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => success());
-    return () => a.removeListener(id);
+    const stops = rows.map((_, i) => rumble(160, { every: 55, from: 'Light', to: 'Light', end: 'Medium', delay: 200 + i * 420 }));
+    stops.push(rumble(2200, { every: 90, from: 'Light', to: 'Medium', delay: rows.length * 420 + 400, end: 'success' }));
+    Animated.timing(a, { toValue: sum, duration: 2200, delay: rows.length * 420 + 400, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    return () => {
+      a.removeListener(id);
+      stops.forEach((f) => f());
+    };
   }, []);
   return (
     <StepLayout title="Kolik můžeš ušetřit?" subtitle="Příklad: kolik by tyhle věci stály z druhé ruky." onNext={next}>
       <View style={st.chartCard}>
         {rows.map(([e, n, p], i) => (
-          <FadeIn key={n} delay={200 + i * 320} style={st.saveRow}>
+          <FadeIn key={n} delay={200 + i * 420} style={st.saveRow}>
             <Text style={{ fontSize: 28 }}>{e}</Text>
             <Text style={[st.h2, { flex: 1, marginLeft: 12 }]}>{n}</Text>
             <Text style={st.strike}>{kc(p)} Kč</Text>
@@ -1928,10 +2079,16 @@ var TakeCompare = function TakeCompare({ next }) {
   const a = useRef(new Animated.Value(0)).current;
   const b = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.stagger(350, [
-      Animated.timing(a, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-      Animated.timing(b, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    const stop1 = rumble(1300, { every: 85, from: 'Light', to: 'Light' });
+    const stop2 = rumble(900, { every: 70, from: 'Light', to: 'Medium', delay: 550, end: 'success' });
+    Animated.stagger(550, [
+      Animated.timing(a, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(b, { toValue: 1, duration: 950, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
     ]).start();
+    return () => {
+      stop1();
+      stop2();
+    };
   }, []);
   return (
     <StepLayout title="Bez smlouvání a posílání" subtitle="Žádné „je to ještě aktuální?“ ani čekání na Zásilkovnu." onNext={next}>
@@ -2266,7 +2423,7 @@ var CountUp = function CountUp({ to, delay = 0 }) {
     if (!to) return;
     const a = new Animated.Value(0);
     const id = a.addListener(({ value }) => setV(Math.round(value)));
-    Animated.timing(a, { toValue: to, duration: 1200, delay, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    Animated.timing(a, { toValue: to, duration: 1800, delay, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
     return () => a.removeListener(id);
   }, [to]);
   return <Text style={[st.bigNum, { fontSize: 40 }]}>{kc(v)}</Text>;
@@ -2276,7 +2433,15 @@ var CommunityStep = function CommunityStep({ next }) {
   const [stats, setStats] = useState(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
-    api.publicStats().then(setStats).catch(() => setFailed(true));
+    let stop = () => {};
+    api
+      .publicStats()
+      .then((x) => {
+        setStats(x);
+        stop = rumble(1900, { every: 95, from: 'Light', to: 'Medium', delay: 300, end: 'success' });
+      })
+      .catch(() => setFailed(true));
+    return () => stop();
   }, []);
   const people = stats ? stats.people : 0;
   const early = !stats || people < 1000;
@@ -3200,6 +3365,12 @@ var ActivityTab = function ActivityTab({ ctx }) {
               </View>
             </View>
             {r.message ? <Text style={[st.body, { marginTop: 10 }]}>„{r.message}“</Text> : null}
+            {r.requester ? <ReasonChips reasons={r.requester.take_reasons} /> : null}
+            {r.requester && r.requester.about ? (
+              <View style={st.aboutQuote}>
+                <Text style={[st.chartAxis, { marginTop: 0, color: INK, lineHeight: 20 }]}>{r.requester.about}</Text>
+              </View>
+            ) : null}
             {r.status === 'pending' ? (
               <View style={{ flexDirection: 'row', marginTop: 12 }}>
                 <Button title="Potvrdit" style={{ flex: 1, height: 48, marginRight: 8, marginBottom: 0 }} onPress={() => ctx.accept(r.id)} />
@@ -3235,11 +3406,42 @@ var ActivityTab = function ActivityTab({ ctx }) {
   );
 }
 
+var AboutSheet = function AboutSheet({ visible, profile, onClose, onSave }) {
+  const [reasons, setReasons] = useState([]);
+  const [about, setAbout] = useState('');
+  useEffect(() => {
+    if (visible) {
+      setReasons((profile && profile.take_reasons) || []);
+      setAbout((profile && profile.about) || '');
+    }
+  }, [visible]);
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#fff' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={st.inboxHeader}>
+          <Pressable onPress={onClose} hitSlop={10}>
+            <Text style={{ color: SUB, fontWeight: '700', fontSize: 16 }}>Zrušit</Text>
+          </Pressable>
+          <Text style={st.h2}>O mně</Text>
+          <Pressable onPress={() => onSave(about.trim(), reasons)} hitSlop={10}>
+            <Text style={{ color: B, fontWeight: '700', fontSize: 16 }}>Uložit</Text>
+          </Pressable>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
+          <Text style={[st.label, { marginTop: 0 }]}>Proč hledáš věci zdarma?</Text>
+          <AboutEditor reasons={reasons} setReasons={setReasons} about={about} setAbout={setAbout} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 // ---------- Profil ----------
 var ProfileTab = function ProfileTab({ ctx, onRestart }) {
   const p = ctx.profile;
   const [name, setName] = useState((p && p.name) || '');
   const [editing, setEditing] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   useEffect(() => setName((p && p.name) || ''), [p && p.name]);
   if (!ctx.myId) {
     return (
@@ -3337,6 +3539,32 @@ var ProfileTab = function ProfileTab({ ctx, onRestart }) {
           ))}
         </View>
 
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <Text style={st.section}>O mně</Text>
+          <Pressable onPress={() => setAboutOpen(true)} hitSlop={10}>
+            <Text style={{ color: B, fontWeight: '700', fontSize: 15 }}>Upravit</Text>
+          </Pressable>
+        </View>
+        <Pressable onPress={() => setAboutOpen(true)} style={st.chartCard}>
+          {(p && ((p.take_reasons || []).length || p.about)) ? (
+            <>
+              <ReasonChips reasons={p.take_reasons} />
+              {p.about ? <Text style={[st.body, { fontSize: 15, lineHeight: 21, marginTop: 8 }]}>{p.about}</Text> : null}
+            </>
+          ) : (
+            <Text style={st.chartAxis}>Napiš, proč hledáš věci zdarma. Dárci to uvidí u tvé žádosti.</Text>
+          )}
+        </Pressable>
+        <AboutSheet
+          visible={aboutOpen}
+          profile={p}
+          onClose={() => setAboutOpen(false)}
+          onSave={(a, r) => {
+            setAboutOpen(false);
+            ctx.updateAbout(a, r);
+          }}
+        />
+
         <Text style={st.section}>Kontakt pro zájemce</Text>
         <View style={st.chartCard}>
           {c && c.methods && c.methods.length ? (
@@ -3424,6 +3652,8 @@ NotifyGive.tip = 'Ozvu se, jen když se něco děje.';
 GiftStep.tip = 'Pssst… mám pro tebe dárek!';
 GiftStep.mood = 'wow';
 FirstItem.tip = 'Hezká fotka = rychlejší zájemce 📸';
+TakeWhy.tip = 'Upřímnost pomáhá – dárci rádi ví, komu věc dělá radost 💜';
+TakeWhy.mood = 'happy';
 CommunityStep.tip = 'Tohle jsou skutečná čísla, žádné výmysly 😉';
 CommunityStep.mood = 'excited';
 TakeCategories.tip = 'Ahoj, já jsem Taki! Pomůžu ti najít poklady.';
@@ -3435,7 +3665,7 @@ TakeDistance.tip = 'Kam až dojdeš pěšky?';
 TakeDistance.mood = 'think';
 NotifyTake.tip = 'Dám vědět, když se objeví něco pro tebe.';
 var GIVE_STEPS = [GiveReason, GiveImpact, GiveWhat, GiveAmount, GivePickup, NeighborsMap, GiveSpeed, CommunityStep, NotifyGive, SetupGive, GiftStep, FirstItem];
-var TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, CommunityStep, NotifyTake, SetupTake, GiftStep, TakeDone];
+var TAKE_STEPS = [TakeCategories, TakeWhy, TakeSavings, TakeCompare, TakeDistance, CommunityStep, NotifyTake, SetupTake, GiftStep, TakeDone];
 
 var Root = function Root() {
   const [route, setRoute] = useState('loading');
@@ -3541,7 +3771,13 @@ var Root = function Root() {
     const uid = s.user.id;
     api.registerPush(uid);
     if (dataRef.current.welcomeGift) await api.claimWelcome().catch(() => {});
-    const [prof, cont] = await Promise.all([api.getProfile(uid), api.getMyContact(uid)]);
+    let [prof, cont] = await Promise.all([api.getProfile(uid), api.getMyContact(uid)]);
+    // „O mně“ z úvodu uložíme do profilu (jen když tam ještě nic není)
+    const d = dataRef.current;
+    if (prof && !(prof.take_reasons || []).length && !prof.about && ((d.takeReasons || []).length || d.about)) {
+      await api.updateAbout(uid, d.about || '', d.takeReasons || []).catch(() => {});
+      prof = { ...prof, about: d.about || '', take_reasons: d.takeReasons || [] };
+    }
     setProfile(prof);
     setContact(cont);
     return uid;
@@ -3613,6 +3849,7 @@ var Root = function Root() {
     block: (otherId) =>
       ctx.requireLogin((uid) => run(() => api.blockUser(uid, otherId), { title: 'Uživatel zablokován', body: 'Jeho věci už neuvidíš a on neuvidí tvoje.' })),
     updateName: (name) => myId && run(() => api.updateName(myId, name)),
+    updateAbout: (about, reasons) => myId && run(() => api.updateAbout(myId, about, reasons), { title: 'Uloženo', body: 'Dárci uvidí tvoje „O mně“ u žádostí.' }),
     signOut: () => run(() => api.signOut()),
     replayOnboarding: async () => {
       await AsyncStorage.removeItem('onboarded').catch(() => {});
@@ -3845,6 +4082,13 @@ var st = StyleSheet.create({
   notice: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: B_LIGHT, borderRadius: 18, padding: 14, marginBottom: 14 },
   noticeTitle: { fontSize: 16, fontWeight: '700', color: INK },
   noticeTxt: { fontSize: 14, lineHeight: 19, color: SUB, marginTop: 2 },
+  reasonChip: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 13, borderRadius: 16, backgroundColor: CARD, marginRight: 8, marginBottom: 8, borderWidth: 2, borderColor: CARD },
+  reasonChipOn: { backgroundColor: B_LIGHT, borderColor: B },
+  reasonTxt: { fontSize: 15, fontWeight: '600', color: INK, marginLeft: 7 },
+  reasonTag: { flexDirection: 'row', alignItems: 'center', backgroundColor: B_LIGHT, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, marginRight: 6, marginBottom: 6 },
+  reasonTagTxt: { fontSize: 12.5, fontWeight: '700', color: B, marginLeft: 4 },
+  aboutInput: { minHeight: 96, backgroundColor: CARD, borderRadius: 16, padding: 14, paddingTop: 14, fontSize: 16, lineHeight: 22, color: INK, textAlignVertical: 'top' },
+  aboutQuote: { marginTop: 6, borderLeftWidth: 3, borderLeftColor: B_LIGHT, paddingLeft: 10 },
   stickyFooter: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 30, borderTopWidth: 1, borderTopColor: '#EFEFF2', backgroundColor: '#fff' },
   optCheck: { position: 'absolute', right: 16, top: '50%', marginTop: 1, width: 22, height: 22, borderRadius: 11, backgroundColor: B, alignItems: 'center', justifyContent: 'center' },
   pointsPill: { backgroundColor: B_LIGHT, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },

@@ -53,6 +53,14 @@ export async function updateName(uid, name) {
   if (error) throw error;
 }
 
+export async function updateAbout(uid, about, reasons) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ about: (about || '').slice(0, 300), take_reasons: (reasons || []).slice(0, 6) })
+    .eq('id', uid);
+  if (error) throw error;
+}
+
 export async function claimWelcome() {
   await supabase.rpc('claim_welcome');
 }
@@ -155,7 +163,7 @@ export async function fetchOutgoing(uid) {
 export async function fetchIncoming(uid) {
   const { data, error } = await supabase
     .from('requests')
-    .select('id, status, message, created_at, item_id, requester:profiles(id, name), item:items!inner(id, title, owner_id, photos)')
+    .select('id, status, message, created_at, item_id, requester:profiles(id, name, about, take_reasons), item:items!inner(id, title, owner_id, photos)')
     .eq('item.owner_id', uid)
     .order('created_at', { ascending: false });
   if (error) throw error;
