@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "TAKE.it",
+    "slug": "takeit",
+    "scheme": "takeit",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#7028E8"
+    },
+    "ios": {
+      "bundleIdentifier": "cz.takeit.app",
+      "supportsTablet": false,
+      "usesAppleSignIn": true,
+      "config": { "usesNonExemptEncryption": false },
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Fotky potřebujeme, abys mohl přidat fotku věci, kterou daruješ.",
+        "NSCameraUsageDescription": "Fotoaparát potřebujeme, abys mohl vyfotit věc, kterou daruješ.",
+        "NSLocationWhenInUseUsageDescription": "Polohu používáme, abychom ti ukázali věci zdarma ve tvém okolí. Ostatní uvidí jen přibližnou oblast."
+      }
+    },
+    "android": {
+      "package": "cz.takeit.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#7028E8"
+      },
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    },
+    "plugins": [
+      "expo-apple-authentication",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Fotky potřebujeme, abys mohl přidat fotku věci, kterou daruješ.",
+          "cameraPermission": "Fotoaparát potřebujeme, abys mohl vyfotit věc, kterou daruješ."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Polohu používáme, abychom ti ukázali věci zdarma ve tvém okolí. Ostatní uvidí jen přibližnou oblast."
+        }
+      ],
+      [
+        "expo-notifications",
+        { "color": "#7028E8" }
+      ],
+      "expo-status-bar"
+    ],
+    "extra": {
+      "eas": {}
+    }
+  }
+}

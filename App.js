@@ -1,6 +1,5 @@
-// TAKE.IT – Pošli to dál.
-// Demo appka pro Expo Go / Expo Snack (jeden soubor).
-import React, { useEffect, useRef, useState } from 'react';
+// TAKE.it – Pošli to dál.
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -21,26 +20,24 @@ import {
   StatusBar,
   Linking,
   Share,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import { BlurView } from 'expo-blur';
+import * as Location from 'expo-location';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import MapViewNative, { Marker as MarkerNative, Circle as CircleNative } from 'react-native-maps';
+import { supabase, isConfigured } from './src/supabase';
+import * as api from './src/api';
+import { SUPPORT_EMAIL, TERMS_URL, PRIVACY_URL } from './src/config';
 
-// Mapa jen na telefonu (na webu by react-native-maps spadla)
-let MapView = null;
-let Marker = null;
-let MapCircle = null;
-if (Platform.OS !== 'web') {
-  try {
-    const maps = require('react-native-maps');
-    MapView = maps.default;
-    Marker = maps.Marker;
-    MapCircle = maps.Circle;
-  } catch (e) {}
-}
+const MapView = MapViewNative;
+const Marker = MarkerNative;
+const MapCircle = CircleNative;
 
 // Notifikace se ukazují i když je appka otevřená
 try {
@@ -73,6 +70,21 @@ const success = () => {
 const kc = (n) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
 // ---------- Data ----------
+const CENTER = { latitude: 50.083, longitude: 14.43 }; // Praha, když není poloha
+
+const CATEGORIES = [
+  ['🛋️', 'Nábytek'], ['📱', 'Elektronika'], ['👕', 'Oblečení'], ['🧸', 'Pro děti'],
+  ['📚', 'Knihy'], ['⚽', 'Sport'], ['🍳', 'Domácnost'], ['🪴', 'Zahrada'],
+  ['🐾', 'Zvířata'], ['🎨', 'Hobby'],
+];
+const CAT_GRAD = {
+  Nábytek: ['#EFE8FF', '#D9CCFF'], Elektronika: ['#FFF1E6', '#FFDCC2'], Oblečení: ['#EAF0FF', '#CFDCFF'],
+  'Pro děti': ['#FFF0E8', '#FFD7C2'], Knihy: ['#FDEBEC', '#F9CDD0'], Sport: ['#E6F6FF', '#C9E9FF'],
+  Domácnost: ['#F2F2F2', '#E0E0E0'], Zahrada: ['#E8F8EC', '#C8EDD2'], Zvířata: ['#FFF9E0', '#FFEFA8'], Hobby: ['#E6FAF6', '#C4EFE6'],
+};
+const catEmoji = (c) => (CATEGORIES.find((x) => x[1] === c) || ['🎁'])[0];
+
+// Ukázkové věci jen pro úvodní obrazovku (ilustrace)
 const PHOTO_IDS = {
   Pohovka: 'photo-1555041469-a586c61ea9bc',
   'Dětské kolo': 'photo-1485965120184-e220f721d03e',
@@ -87,8 +99,8 @@ const PHOTO_IDS = {
   Sluchátka: 'photo-1505740420928-5e560c06d30e',
   'Sada hrnků': 'photo-1514228742587-6b1558fcca3d',
 };
-const photo = (id, extra = '') => `https://images.unsplash.com/${id}?w=700&q=70&auto=format&fit=crop${extra}`;
-const ITEMS_RAW = [
+const photo = (id) => `https://images.unsplash.com/${id}?w=700&q=70&auto=format&fit=crop`;
+const ITEMS = [
   { t: 'Pohovka', e: '🛋️', km: '1,2', m: 8, g: ['#EFE8FF', '#D9CCFF'] },
   { t: 'Dětské kolo', e: '🚲', km: '2,4', m: 14, g: ['#E6F6FF', '#C9E9FF'] },
   { t: 'Monitor 24"', e: '🖥️', km: '0,8', m: 3, g: ['#FFF1E6', '#FFDCC2'] },
@@ -101,33 +113,7 @@ const ITEMS_RAW = [
   { t: 'Jídelní židle', e: '🪑', km: '3,8', m: 18, g: ['#F4EDE6', '#E6D6C6'] },
   { t: 'Sluchátka', e: '🎧', km: '2,9', m: 12, g: ['#EEE8FF', '#DCCFFF'] },
   { t: 'Sada hrnků', e: '🍵', km: '0,6', m: 2, g: ['#E6FAF6', '#C4EFE6'] },
-];
-
-const VALUES = { Pohovka: 3000, 'Dětské kolo': 1200, 'Monitor 24"': 1500, Kávovar: 800, Monstera: 400, 'Stolní lampa': 300, 'Krabice knih': 500, 'Zimní bunda': 900, Plyšáci: 300, 'Jídelní židle': 600, Sluchátka: 700, 'Sada hrnků': 200 };
-const CENTER = { latitude: 50.083, longitude: 14.43 };
-const DONORS = [
-  { n: 'Petra', e: '👩‍🦰', r: '4,9', c: 12, resp: 'do 1 h' },
-  { n: 'Tomáš', e: '🧔', r: '5,0', c: 4, resp: 'do 30 min' },
-  { n: 'Lucie', e: '👩', r: '4,8', c: 21, resp: 'do 2 h' },
-  { n: 'Martin', e: '👨', r: '4,7', c: 7, resp: 'během dne' },
-];
-const ITEM_CATS = { Pohovka: 'Nábytek', 'Dětské kolo': 'Sport', 'Monitor 24"': 'Elektronika', Kávovar: 'Domácnost', Monstera: 'Zahrada', 'Stolní lampa': 'Domácnost', 'Krabice knih': 'Knihy', 'Zimní bunda': 'Oblečení', Plyšáci: 'Pro děti', 'Jídelní židle': 'Nábytek', Sluchátka: 'Elektronika', 'Sada hrnků': 'Domácnost' };
-const ITEMS = ITEMS_RAW.map((it, i) => ({ ...it, img: PHOTO_IDS[it.t] ? photo(PHOTO_IDS[it.t]) : null, img2: PHOTO_IDS[it.t] ? photo(PHOTO_IDS[it.t], '&crop=focalpoint&fp-x=0.5&fp-y=0.5&fp-z=1.8') : null, cat: ITEM_CATS[it.t], donor: DONORS[i % DONORS.length], lat: CENTER.latitude + (((i * 37) % 11) - 5) * 0.0045, lng: CENTER.longitude + (((i * 53) % 13) - 6) * 0.006, v: VALUES[it.t] || 500, demo: true, contact: DEMO_CONTACT, d: 'Ve velmi dobrém stavu, vyzvednutí po domluvě.', chip: 'U dveří' }));
-
-const CATEGORIES = [
-  ['🛋️', 'Nábytek'], ['📱', 'Elektronika'], ['👕', 'Oblečení'], ['🧸', 'Pro děti'],
-  ['📚', 'Knihy'], ['⚽', 'Sport'], ['🍳', 'Domácnost'], ['🪴', 'Zahrada'],
-  ['🐾', 'Zvířata'], ['🎨', 'Hobby'],
-];
-
-const PINS = [
-  { latitude: 50.0875, longitude: 14.4213 },
-  { latitude: 50.0755, longitude: 14.4378 },
-  { latitude: 50.1035, longitude: 14.4505 },
-  { latitude: 50.0645, longitude: 14.4075 },
-  { latitude: 50.0828, longitude: 14.4638 },
-  { latitude: 50.0965, longitude: 14.3955 },
-];
+].map((it) => ({ ...it, img: PHOTO_IDS[it.t] ? photo(PHOTO_IDS[it.t]) : null }));
 
 const CONTACTS = [
   { id: 'whatsapp', label: 'WhatsApp', e: '💬', color: '#25D366', field: 'phone' },
@@ -147,15 +133,9 @@ const messengerUrl = (raw) => {
 };
 const isFbLink = (raw) => /(facebook\.com|fb\.com|m\.me|messenger\.com)\/[^\s]+/i.test((raw || '').trim());
 
-const DEMO_CONTACT = { methods: ['whatsapp', 'sms', 'phone'], phone: '', messenger: '' };
-
-function openContact(method, item) {
-  const c = item.contact || {};
-  if (item.demo) {
-    Alert.alert('Ukázkový inzerát', 'Tohle je jen ukázka – kontakt není skutečný. Přidej vlastní věc a vyzkoušej si to na ní.');
-    return;
-  }
-  const msg = `Ahoj, mám zájem o „${item.t}“ z TAKE.IT. Je to ještě k dispozici? 🙂`;
+function openContact(method, item, c) {
+  if (!c) return;
+  const msg = `Ahoj, mám zájem o „${item.t}“ z TAKE.it. Je to ještě k dispozici? 🙂`;
   const enc = encodeURIComponent(msg);
   const digits = (c.phone || '').replace(/[^0-9+]/g, '');
   const wa = digits.replace(/^\+/, '');
@@ -168,19 +148,48 @@ function openContact(method, item) {
   Linking.openURL(url).catch(() => Alert.alert('Nejde otevřít', 'Tuhle appku nemáš v telefonu nainstalovanou.'));
 }
 
-// ---------- Sleva pro dárce ----------
-const TIERS = [
-  { n: 1, pct: 20 },
-  { n: 3, pct: 40 },
-  { n: 5, pct: 60 },
-];
-const discountFor = (n) => TIERS.reduce((d, t) => (n >= t.n ? t.pct : d), 0);
-const nextTier = (n) => TIERS.find((t) => n < t.n);
-const discInfo = (ctx) => {
-  const donor = discountFor(ctx.myItems.length);
-  const welcome = ctx.data.welcomeGift ? 20 : 0;
-  return donor >= welcome ? { pct: donor, label: 'jako dárce' } : { pct: welcome, label: 'uvítací dárek' };
+// Čas a vzdálenost pro lidi
+const ago = (ts) => {
+  const min = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
+  if (min < 1) return 'právě teď';
+  if (min < 60) return `před ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `před ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d === 1) return 'včera';
+  return d < 5 ? `před ${d} dny` : `před ${d} dny`;
 };
+const kmText = (d) => (d == null ? 'v okolí' : d < 1 ? `${Math.max(100, Math.round(d * 10) * 100)} m` : `${d.toFixed(1).replace('.', ',')} km`);
+
+// Řádek z databáze → věc pro UI
+function mapItem(r, myId) {
+  const photos = r.photos || [];
+  const it = {
+    id: r.id,
+    owner_id: r.owner_id,
+    owner_name: r.owner_name || (r.owner && r.owner.name) || 'Soused',
+    t: r.title,
+    d: r.description,
+    cat: r.category,
+    chip: r.pickup,
+    photos,
+    uri: photos[0],
+    lat: r.lat,
+    lng: r.lng,
+    status: r.status,
+    views: r.views || 0,
+    created_at: r.created_at,
+    distance: r.distance_km,
+    kmText: kmText(r.distance_km),
+    own: !!myId && r.owner_id === myId,
+    e: catEmoji(r.category),
+    g: CAT_GRAD[r.category] || [B_LIGHT, '#DCCFFF'],
+    requests: r.requests || [],
+  };
+  it.meta = `${it.kmText} • ${ago(r.created_at)}`;
+  return it;
+}
+
 
 // ---------- UI základ ----------
 function Logo({ size = 40, color = B }) {
@@ -501,7 +510,7 @@ function ItemCard({ item, i = 0, onPress }) {
         </Thumb>
         <View style={{ padding: 10 }}>
           <Text style={st.itemTitle} numberOfLines={1}>{item.t}</Text>
-          <Text style={st.itemMeta}>{item.km} km • před {item.m} min</Text>
+          <Text style={st.itemMeta}>{item.meta || `${item.km} km • před ${item.m} min`}</Text>
         </View>
       </Pressable>
     </FadeIn>
@@ -517,6 +526,7 @@ function Grid({ items, onItem }) {
     </View>
   );
 }
+
 
 // ---------- Flow (progress + kroky) ----------
 function Flow({ steps, onExit, onFinish, ctx }) {
@@ -557,6 +567,7 @@ function Flow({ steps, onExit, onFinish, ctx }) {
     </SafeAreaView>
   );
 }
+
 
 // ---------- Welcome ----------
 function FloatCard({ item, style, rot, delay }) {
@@ -687,6 +698,7 @@ function Intro({ onPick }) {
   );
 }
 
+
 // ---------- DAROVAT ----------
 function GiveReason({ next, ctx }) {
   const [sel, setSel] = useState(ctx.data.reason || null);
@@ -719,8 +731,8 @@ function GiveSavings({ next }) {
   }, []);
   return (
     <StepLayout
-      title="Ušetři až 2 000 Kč za odvoz"
-      subtitle="Tolik si firmy běžně řeknou za odvoz jedné sedačky."
+      title="Ušetři za odvoz"
+      subtitle="Odvoz objemné věci tě může stát stovky korun. Soused si ji odnese zdarma."
       onNext={next}
     >
       <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -734,7 +746,7 @@ function GiveSavings({ next }) {
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 14 }}>
           <View style={st.barLabelBox}>
-            <Text style={st.barValue}>1–2 tis. Kč</Text>
+            <Text style={st.barValue}>stovky Kč</Text>
             <Text style={st.barLabel}>Odvoz</Text>
           </View>
           <View style={st.barLabelBox}>
@@ -1040,6 +1052,7 @@ function GivePickup({ next, ctx }) {
   );
 }
 
+
 function PinBubble() {
   return (
     <View style={st.pin}>
@@ -1056,61 +1069,6 @@ function PopIn({ children, delay = 0 }) {
   return <Animated.View style={{ transform: [{ scale: a }] }}>{children}</Animated.View>;
 }
 
-function NeighborsMap({ next }) {
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    const ts = PINS.map((_, i) =>
-      setTimeout(() => {
-        setN(i + 1);
-        tap();
-      }, 600 + i * 450)
-    );
-    return () => ts.forEach(clearTimeout);
-  }, []);
-  return (
-    <View style={{ flex: 1 }}>
-      {MapView ? (
-        <MapView
-          style={StyleSheet.absoluteFill}
-          initialRegion={{ latitude: 50.083, longitude: 14.43, latitudeDelta: 0.07, longitudeDelta: 0.07 }}
-          scrollEnabled={false}
-          zoomEnabled={false}
-        >
-          {PINS.slice(0, n).map((p, i) => (
-            <Marker key={i} coordinate={p}>
-              <PopIn>
-                <PinBubble />
-              </PopIn>
-            </Marker>
-          ))}
-        </MapView>
-      ) : (
-        <LinearGradient colors={['#EEF6E8', '#DCEFD3']} style={StyleSheet.absoluteFill}>
-          {PINS.slice(0, n).map((p, i) => (
-            <View key={i} style={{ position: 'absolute', left: 30 + ((i * 97) % (W - 140)), top: 180 + i * 70 }}>
-              <PopIn>
-                <PinBubble />
-              </PopIn>
-            </View>
-          ))}
-        </LinearGradient>
-      )}
-      <LinearGradient
-        colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0)']}
-        style={{ paddingHorizontal: 24, paddingBottom: 60 }}
-        pointerEvents="none"
-      >
-        <FadeIn>
-          <Text style={st.h1}>Sousedé v Praze chtějí věci zdarma</Text>
-          <Text style={[st.sub, { color: INK }]}>{n ? `${n} ${n === 1 ? 'zájemce' : n < 5 ? 'zájemci' : 'zájemců'} v okolí 👀` : 'Hledáme kolem tebe…'}</Text>
-        </FadeIn>
-      </LinearGradient>
-      <View style={{ position: 'absolute', left: 24, right: 24, bottom: 0 }}>
-        <Button title="Pokračovat" onPress={next} />
-      </View>
-    </View>
-  );
-}
 
 function GiveSpeed({ next }) {
   const a = useRef(new Animated.Value(0)).current;
@@ -1328,162 +1286,6 @@ const SetupGive = (p) => (
 );
 SetupGive.hideHeader = true;
 
-function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideSkip }) {
-  const saved = ctx.data.savedContact || {};
-  const [photos, setPhotos] = useState([]);
-  const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
-  const [chip, setChip] = useState('U dveří');
-  const [methods, setMethods] = useState((saved.methods || ['whatsapp']).filter((m) => CONTACTS.some((c) => c.id === m)));
-  const [phone, setPhone] = useState(saved.phone || '+420 ');
-  const [messenger, setMessenger] = useState(saved.messenger || '');
-  const pick = async () => {
-    try {
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsMultipleSelection: true,
-        selectionLimit: 5,
-        quality: 0.7,
-      });
-      if (!res.canceled) setPhotos([...photos, ...res.assets.map((a) => a.uri)].slice(0, 5));
-    } catch (e) {
-      Alert.alert('Fotky', 'Nepodařilo se otevřít galerii.');
-    }
-  };
-  const toggle = (id) => setMethods(methods.includes(id) ? methods.filter((m) => m !== id) : [...methods, id]);
-  const needPhone = methods.some((m) => ['whatsapp', 'phone', 'sms'].includes(m));
-  const needMessenger = methods.includes('messenger');
-  const phoneOk = !needPhone || phone.replace(/[^0-9]/g, '').length >= 9;
-  const messengerOk = !needMessenger || isFbLink(messenger);
-  const valid = title.trim() && methods.length > 0 && phoneOk && messengerOk;
-  const chips = [['🚪', 'U dveří'], ['🕒', 'Kdykoli dnes'], ['📦', 'Před domem']];
-  return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
-        <FadeIn>
-          <Text style={[st.h1, { fontSize: 28, lineHeight: 34 }]}>{heading}</Text>
-        </FadeIn>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 14 }}>
-          <Pressable onPress={pick} style={st.addPhoto}>
-            <Text style={{ fontSize: 26 }}>📷</Text>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: SUB, marginTop: 2 }}>{photos.length ? `${photos.length}/5` : 'Přidat'}</Text>
-          </Pressable>
-          {photos.map((u, k) => (
-            <View key={u}>
-              <Image source={{ uri: u }} style={st.smallThumb} />
-              {k === 0 ? (
-                <View style={st.coverTag}>
-                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>Titulní</Text>
-                </View>
-              ) : null}
-            </View>
-          ))}
-        </ScrollView>
-
-        <TextInput value={title} onChangeText={setTitle} placeholder="Co daruješ?" placeholderTextColor="#B5B5BA" style={[st.input, st.inputSm]} />
-        <TextInput
-          value={desc}
-          onChangeText={setDesc}
-          placeholder="Stav, velikost, poznámka…"
-          placeholderTextColor="#B5B5BA"
-          style={[st.input, st.inputSm, { height: 64, textAlignVertical: 'top' }]}
-          multiline
-        />
-
-        <Text style={st.label}>Vyzvednutí</Text>
-        <View style={{ flexDirection: 'row' }}>
-          {chips.map(([e, l]) => (
-            <Pressable
-              key={l}
-              onPress={() => {
-                tap();
-                setChip(l);
-              }}
-              style={[st.chipSm, chip === l && st.chipSel]}
-            >
-              <Text style={[st.chipSmTxt, chip === l && { color: '#fff' }]} numberOfLines={1}>{e} {l}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={st.label}>Jak tě můžou kontaktovat?</Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          {CONTACTS.map((c) => {
-            const on = methods.includes(c.id);
-            return (
-              <Pressable
-                key={c.id}
-                onPress={() => {
-                  tap();
-                  toggle(c.id);
-                }}
-                style={{ alignItems: 'center', width: (W - 48) / 4 }}
-              >
-                <View style={[st.contactCircle, on && { backgroundColor: c.color, borderColor: c.color }]}>
-                  <Text style={{ fontSize: 24 }}>{c.e}</Text>
-                </View>
-                <Text style={[st.contactTxt, { marginTop: 4 }, on && { color: INK }]}>{c.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        {needPhone ? (
-          <TextInput
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="Telefonní číslo"
-            placeholderTextColor="#B5B5BA"
-            keyboardType="phone-pad"
-            style={[st.input, st.inputSm, !phoneOk && phone.length > 5 && st.inputErr]}
-          />
-        ) : null}
-        {needMessenger ? (
-          <TextInput
-            value={messenger}
-            onChangeText={setMessenger}
-            placeholder="Odkaz na Facebook profil (facebook.com/…)"
-            placeholderTextColor="#B5B5BA"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            style={[st.input, st.inputSm, !messengerOk && messenger.length > 3 && st.inputErr]}
-          />
-        ) : null}
-        <Text style={[st.chartAxis, { marginTop: 8, fontSize: 12 }]}>🔒 Kontakt uvidí jen ten, koho potvrdíš.</Text>
-      </ScrollView>
-      <View style={{ paddingHorizontal: 24, paddingTop: 6 }}>
-        {hideSkip ? null : (
-          <Pressable onPress={next} hitSlop={10}>
-            <Text style={[st.secondary, { marginBottom: 12, fontSize: 15 }]}>Udělám to později</Text>
-          </Pressable>
-        )}
-        <Button
-          title="Zveřejnit"
-          disabled={!valid}
-          onPress={() => {
-            const contact = { methods, phone: phone.trim(), messenger: messenger.trim() };
-            ctx.set('savedContact', contact);
-            ctx.addItem({
-              t: title.trim(),
-              d: desc.trim(),
-              uri: photos[0],
-              photos,
-              chip,
-              e: '🎁',
-              km: '0',
-              m: 0,
-              g: [B_LIGHT, '#DCCFFF'],
-              contact,
-            });
-            success();
-            next();
-          }}
-        />
-      </View>
-    </KeyboardAvoidingView>
-  );
-}
 
 function Gallery({ item, height }) {
   const [page, setPage] = useState(0);
@@ -1530,205 +1332,6 @@ function Gallery({ item, height }) {
   );
 }
 
-function ItemDetail({ item, onClose, ctx }) {
-  const [asking, setAsking] = useState(false);
-  const [msg, setMsg] = useState('Ahoj, můžu si to vyzvednout dnes večer?');
-  const heart = useRef(new Animated.Value(1)).current;
-  useEffect(() => setAsking(false), [item && (item.id || item.t)]);
-  if (!item) return null;
-  const own = !item.demo;
-  const status = ctx.outReq[item.t];
-  const methods = (item.contact && item.contact.methods) || [];
-  const incoming = ctx.requests.filter((r) => r.itemId === item.id);
-  const pending = incoming.filter((r) => r.status === 'pending').length;
-  const favs = ctx.data.favs || [];
-  const fav = favs.includes(item.t);
-  const donor = own ? { n: ctx.data.name || 'Ty', e: '🙂', r: '–', c: ctx.myItems.length, resp: '' } : item.donor || DONORS[0];
-  const lat = item.lat || 50.08;
-  const lng = item.lng || 14.43;
-  const toggleFav = () => {
-    tap();
-    heart.setValue(1.4);
-    Animated.spring(heart, { toValue: 1, friction: 3, useNativeDriver: true }).start();
-    ctx.set('favs', fav ? favs.filter((x) => x !== item.t) : [...favs, item.t]);
-  };
-  const share = () => Share.share({ message: `Na TAKE.IT je zdarma „${item.t}“ 🎁 Kousek ode mě v Praze – mrkni do appky!` }).catch(() => {});
-
-  let footer = null;
-  if (own) {
-    footer = item.status === 'reserved' ? (
-      <Button title="Označit jako předané ✅" style={{ marginBottom: 0 }} onPress={() => { ctx.markGiven(item.id); onClose(); }} />
-    ) : pending ? (
-      <Button title={`Zobrazit zájemce (${pending})`} style={{ marginBottom: 0 }} onPress={() => { onClose(); ctx.openInbox(); }} />
-    ) : null;
-  } else if (status === 'accepted') {
-    footer = (
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-        {CONTACTS.filter((c) => methods.includes(c.id)).map((c) => (
-          <Pressable
-            key={c.id}
-            onPress={() => {
-              tap();
-              openContact(c.id, item);
-            }}
-            style={({ pressed }) => [st.contactBtn, { backgroundColor: c.color, flex: 1, marginHorizontal: 4, marginTop: 0 }, pressed && { opacity: 0.85 }]}
-          >
-            <Text style={{ fontSize: 18 }}>{c.e}</Text>
-            <Text style={[st.contactBtnTxt, { fontSize: 15 }]}>{c.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-    );
-  } else if (status === 'pending') {
-    footer = (
-      <View style={[st.statusCard, { flexDirection: 'row', justifyContent: 'center', paddingVertical: 16 }]}>
-        <ActivityIndicator color={B} />
-        <Text style={[st.h2, { marginLeft: 10, fontSize: 16 }]}>Čekáme na potvrzení dárce…</Text>
-      </View>
-    );
-  } else if (asking) {
-    footer = <Button title="Odeslat žádost" disabled={!msg.trim()} style={{ marginBottom: 0 }} onPress={() => ctx.requestItem(item, msg.trim())} />;
-  } else {
-    footer = <Button title="🙋  Mám zájem" style={{ marginBottom: 0 }} onPress={() => setAsking(true)} />;
-  }
-
-  return (
-    <Modal visible={!!item} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#fff' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
-          <View>
-            <Gallery item={item} height={340} />
-            <View style={st.detailTopBar}>
-              <Pressable onPress={onClose} hitSlop={10} style={st.roundBtn}>
-                <Text style={{ fontSize: 18, color: INK }}>✕</Text>
-              </Pressable>
-              <View style={{ flexDirection: 'row' }}>
-                <Pressable onPress={share} hitSlop={10} style={[st.roundBtn, { marginRight: 10 }]}>
-                  <Text style={{ fontSize: 17 }}>↗︎</Text>
-                </Pressable>
-                {!own ? (
-                  <Pressable onPress={toggleFav} hitSlop={10} style={st.roundBtn}>
-                    <Animated.Text style={{ fontSize: 18, transform: [{ scale: heart }] }}>{fav ? '💜' : '🤍'}</Animated.Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-          </View>
-
-          <View style={{ padding: 24 }}>
-            <Text style={st.h1}>{item.t}</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 }}>
-              <View style={[st.metaChip, { backgroundColor: '#DDF7E5' }]}>
-                <Text style={{ color: GREEN, fontWeight: '900' }}>ZDARMA</Text>
-              </View>
-              <View style={st.metaChip}>
-                <Text style={st.metaTxt}>📍 {own ? 'Tvoje místo' : `${item.km} km`}</Text>
-              </View>
-              <View style={st.metaChip}>
-                <Text style={st.metaTxt}>🕒 {own ? 'právě teď' : `před ${item.m} min`}</Text>
-              </View>
-              {item.chip ? (
-                <View style={st.metaChip}>
-                  <Text style={st.metaTxt}>🚪 {item.chip}</Text>
-                </View>
-              ) : null}
-            </View>
-
-            <View style={st.donorCard}>
-              <View style={st.avatar}>
-                <Text style={{ fontSize: 24 }}>{donor.e}</Text>
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={st.h2}>{own ? 'Tvoje věc' : donor.n}</Text>
-                <Text style={st.chartAxis}>
-                  {own ? `Daroval jsi ${donor.c} ${donor.c === 1 ? 'věc' : 'věci'}` : `⭐ ${donor.r} • daroval/a ${donor.c} věcí • odpovídá ${donor.resp}`}
-                </Text>
-              </View>
-              {!own ? (
-                <View style={st.verified}>
-                  <Text style={{ color: B, fontWeight: '800', fontSize: 11 }}>✓ Ověřený</Text>
-                </View>
-              ) : null}
-            </View>
-
-            {item.d ? (
-              <>
-                <Text style={st.section}>Popis</Text>
-                <Text style={st.body}>{item.d}</Text>
-              </>
-            ) : null}
-
-            <Text style={st.section}>Kde to je</Text>
-            <View style={st.miniMap}>
-              {MapView ? (
-                <MapView
-                  style={StyleSheet.absoluteFill}
-                  pointerEvents="none"
-                  initialRegion={{ latitude: lat, longitude: lng, latitudeDelta: 0.025, longitudeDelta: 0.025 }}
-                  scrollEnabled={false}
-                  zoomEnabled={false}
-                >
-                  {MapCircle ? (
-                    <MapCircle center={{ latitude: lat, longitude: lng }} radius={600} fillColor="rgba(112,40,232,0.18)" strokeColor={B} strokeWidth={2} />
-                  ) : null}
-                </MapView>
-              ) : (
-                <LinearGradient colors={['#EEF6E8', '#DCEFD3']} style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-                  <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(112,40,232,0.18)', borderWidth: 2, borderColor: B }} />
-                </LinearGradient>
-              )}
-            </View>
-            <Text style={[st.chartAxis, { marginTop: 8 }]}>🔒 Přesné místo ti dárce pošle až po potvrzení.</Text>
-
-            {own ? (
-              <View style={[st.chartCard, { marginTop: 22 }]}>
-                <Text style={st.h2}>Stav</Text>
-                <Text style={st.chartAxis}>
-                  {item.status === 'given'
-                    ? '✅ Předáno – díky, že posíláš věci dál!'
-                    : item.status === 'reserved'
-                    ? '🤝 Rezervováno – zájemce dostal tvůj kontakt.'
-                    : incoming.length
-                    ? `👀 ${item.views || 0} zobrazení • 🙋 ${incoming.length} zájemci${pending ? ` • čeká ${pending}` : ''}`
-                    : `👀 ${item.views || 0} zobrazení • zatím bez zájemců`}
-                </Text>
-                {item.status !== 'given' ? (
-                  <Pressable
-                    onPress={() => {
-                      ctx.deleteItem(item.id);
-                      onClose();
-                    }}
-                    hitSlop={10}
-                  >
-                    <Text style={[st.secondary, { marginTop: 14, marginBottom: 0, color: '#FF3B30', textAlign: 'left' }]}>Smazat inzerát</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
-
-            {!own && status === 'accepted' ? (
-              <View style={[st.statusCard, { marginTop: 22, backgroundColor: '#DDF7E5' }]}>
-                <Text style={st.h2}>✅ Dárce potvrdil – je to tvoje!</Text>
-                <Text style={st.chartAxis}>Kontakt je odemčený, ozvi se mu tlačítkem dole.</Text>
-              </View>
-            ) : null}
-
-            {!own && !status && asking ? (
-              <FadeIn style={{ marginTop: 22 }}>
-                <Text style={st.section}>Zpráva pro {donor.n}</Text>
-                <TextInput value={msg} onChangeText={setMsg} multiline autoFocus style={[st.input, { height: 90, textAlignVertical: 'top' }]} />
-              </FadeIn>
-            ) : null}
-            {!own && !status && !asking ? (
-              <Text style={[st.chartAxis, { marginTop: 18 }]}>🔒 Kontakt na dárce se odemkne, až potvrdí tvoji žádost.</Text>
-            ) : null}
-          </View>
-        </ScrollView>
-        {footer ? <View style={st.stickyFooter}>{footer}</View> : null}
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
 
 function timeAgo(d) {
   const m = Math.floor((Date.now() - d) / 60000);
@@ -1764,83 +1367,6 @@ function Toast({ toast, onPress, onHide }) {
   );
 }
 
-function DonorPerks({ next }) {
-  const steps = useRef(TIERS.map(() => new Animated.Value(0))).current;
-  const [price, setPrice] = useState(99);
-  const [active, setActive] = useState(-1);
-  useEffect(() => {
-    const ts = TIERS.map((t, i) =>
-      setTimeout(() => {
-        setActive(i);
-        setPrice(Math.round(99 * (1 - t.pct / 100)));
-        tap();
-        Animated.spring(steps[i], { toValue: 1, friction: 5, useNativeDriver: true }).start();
-        if (i === TIERS.length - 1) success();
-      }, 700 + i * 1000)
-    );
-    return () => ts.forEach(clearTimeout);
-  }, []);
-  return (
-    <StepLayout
-      title="Dárci mají TAKE.IT Plus levněji"
-      subtitle="Za každou věc, kterou daruješ, ti zlevníme předplatné. S ním uvidíš všechny věci zdarma kolem sebe."
-      onNext={next}
-    >
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        <FadeIn style={[st.chartCard, { alignItems: 'center', paddingVertical: 26 }]}>
-          <Text style={st.chartAxis}>TAKE.IT Plus • první měsíc</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 6 }}>
-            {price < 99 ? <Text style={[st.strike, { fontSize: 22, marginBottom: 10 }]}>99 Kč</Text> : null}
-            <Text style={[st.bigNum, { fontSize: 64 }]}>{price} Kč</Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 24, width: '100%', justifyContent: 'space-between' }}>
-            <View style={st.perkLine} />
-            {TIERS.map((t, i) => (
-              <View key={t.n} style={{ alignItems: 'center', width: 90 }}>
-                <Animated.View
-                  style={[
-                    st.perkDot,
-                    i <= active && { backgroundColor: B, borderColor: B },
-                    { transform: [{ scale: steps[i].interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.35, 1] }) }] },
-                  ]}
-                >
-                  <Text style={{ fontSize: 22 }}>{i <= active ? '🎁' : '📦'}</Text>
-                </Animated.View>
-                <Text style={[st.h2, { marginTop: 8, color: i <= active ? B : SUB }]}>−{t.pct} %</Text>
-                <Text style={st.chartAxis}>{t.n} {t.n === 1 ? 'věc' : t.n < 5 ? 'věci' : 'věcí'}</Text>
-              </View>
-            ))}
-          </View>
-        </FadeIn>
-        <FadeIn delay={3600}>
-          <Text style={[st.sub, { textAlign: 'center', marginTop: 22 }]}>Darování je vždycky zdarma. 💜</Text>
-        </FadeIn>
-      </View>
-    </StepLayout>
-  );
-}
-
-function DiscountUnlocked({ count }) {
-  const pct = discountFor(count);
-  const a = useRef(new Animated.Value(0)).current;
-  const [shown, setShown] = useState(0);
-  useEffect(() => {
-    const id = a.addListener(({ value }) => setShown(Math.round(value)));
-    Animated.timing(a, { toValue: pct, duration: 1200, delay: 600, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(() => pct && success());
-    return () => a.removeListener(id);
-  }, [pct]);
-  const nt = nextTier(count);
-  if (!pct) return null;
-  return (
-    <View style={[st.statusCard, { marginTop: 16, backgroundColor: B }]}>
-      <Text style={{ color: '#fff', fontWeight: '700' }}>Odemkl sis slevu pro dárce</Text>
-      <Text style={{ color: '#fff', fontWeight: '900', fontSize: 48 }}>−{shown} %</Text>
-      <Text style={{ color: '#EDE5FF', textAlign: 'center' }}>
-        na TAKE.IT Plus{nt ? ` • daruj ještě ${nt.n - count} a máš −${nt.pct} %` : ' • maximální sleva 🎉'}
-      </Text>
-    </View>
-  );
-}
 
 function GiftStep({ next, ctx }) {
   const [taps, setTaps] = useState(0);
@@ -1882,13 +1408,13 @@ function GiftStep({ next, ctx }) {
   };
   const rewards = [
     ['🌱', 'Odznak Nováček', 'Za to, že jsi s námi od začátku'],
-    ['⭐', '+100 bodů dobra', 'Sbírej body za darování a předávání'],
-    ['💜', 'Uvítací sleva −20 %', 'Na první období TAKE.IT Plus'],
+    ['⭐', '+100 bodů dobra', 'Připíšeme ti je po prvním přihlášení'],
+    ['🎁', 'Darování navždy zdarma', 'Na TAKE.it nikdy neplatíš za to, že pomáháš'],
   ];
   return (
     <StepLayout
       title={open ? 'Tvůj dárek za stažení 🎉' : 'Máme pro tebe dárek'}
-      subtitle={open ? 'Díky, že jsi tady. Tohle všechno je tvoje:' : 'Díky, že sis TAKE.IT stáhl. Ťukni 3× na dárek a otevři ho.'}
+      subtitle={open ? 'Díky, že jsi tady. Tohle všechno je tvoje:' : 'Díky, že sis TAKE.it stáhl. Ťukni 3× na dárek a otevři ho.'}
       cta={open ? 'Super, pokračovat' : null}
       onNext={next}
     >
@@ -1932,61 +1458,6 @@ function GiftStep({ next, ctx }) {
 }
 GiftStep.noPoints = true;
 
-const SetupGiveWrap = SetupGive;
-const GIVE_STEPS = [GiveReason, GiveImpact, GiveWhat, GiveAmount, GivePickup, NeighborsMap, GiveSpeed, DonorPerks, NotifyGive, SetupGiveWrap, GiftStep, FirstItem];
-
-function Given({ ctx, onContinue, onRestart }) {
-  const item = ctx.myItems[ctx.myItems.length - 1];
-  const n = item ? ctx.requests.filter((r) => r.itemId === item.id).length : 0;
-  return (
-    <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, justifyContent: 'center', paddingVertical: 20 }}>
-        <FadeIn style={{ alignItems: 'center' }}>
-          <Text style={{ fontSize: 64 }}>🎉</Text>
-          <Text style={[st.h1, { textAlign: 'center' }]}>{item ? 'Tvoje věc je venku!' : 'Vše nastaveno!'}</Text>
-          <Text style={[st.sub, { textAlign: 'center' }]}>
-            {item ? 'Dáme ti vědět, jakmile si o ni někdo řekne.' : 'Věc můžeš přidat kdykoli tlačítkem ＋ dole.'}
-          </Text>
-        </FadeIn>
-        {item ? (
-          <FadeIn delay={250} style={[st.itemCard, { marginTop: 24, flexDirection: 'row', alignItems: 'center' }]}>
-            <LinearGradient colors={item.g} style={{ width: 88, height: 88, alignItems: 'center', justifyContent: 'center' }}>
-              {item.uri ? <Image source={{ uri: item.uri }} style={StyleSheet.absoluteFill} /> : <Text style={{ fontSize: 40 }}>{item.e}</Text>}
-            </LinearGradient>
-            <View style={{ padding: 14, flex: 1 }}>
-              <Text style={st.itemTitle}>{item.t}</Text>
-              <Text style={{ color: GREEN, fontWeight: '800', marginTop: 4 }}>Zdarma</Text>
-              <Text style={st.itemMeta}>
-                Kontakt: {CONTACTS.filter((c) => item.contact.methods.includes(c.id)).map((c) => c.e).join(' ')}
-              </Text>
-            </View>
-          </FadeIn>
-        ) : null}
-        {item ? <DiscountUnlocked count={ctx.myItems.length} /> : null}
-        {item ? (
-          <FadeIn delay={500} style={[st.statusCard, { marginTop: 16 }]}>
-            {n ? (
-              <Text style={st.h2}>🙋 Zájemci: {n} – najdeš je v Aktivitě</Text>
-            ) : (
-              <>
-                <ActivityIndicator color={B} />
-                <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 8 }]}>
-                  Demo: za pár vteřin se ozve první soused – sleduj upozornění 👀
-                </Text>
-              </>
-            )}
-          </FadeIn>
-        ) : null}
-      </ScrollView>
-      <View style={{ paddingHorizontal: 24 }}>
-        <Button title="Pokračovat do appky" onPress={onContinue} />
-        <Pressable onPress={onRestart} hitSlop={10}>
-          <Text style={[st.secondary, { marginBottom: 0, marginTop: 14 }]}>Začít znovu (test)</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
-  );
-}
 
 // ---------- CHCI ZDARMA ----------
 function TakeCategories({ next, ctx }) {
@@ -2137,268 +1608,6 @@ const SetupTake = (p) => (
 );
 SetupTake.hideHeader = true;
 
-function Paywall({ visible, onClose, onUnlock, discount = 0 }) {
-  const [plan, setPlan] = useState('year');
-  const [busy, setBusy] = useState(false);
-  const f = (p) => Math.round(p * (1 - discount / 100));
-  const plans = [
-    { id: 'year', name: 'Roční', base: 499, note: discount ? 'první rok' : '41 Kč měsíčně', badge: 'Nejvýhodnější' },
-    { id: 'month', name: 'Měsíční', base: 99, note: discount ? 'první měsíc, pak 99 Kč' : 'měsíčně' },
-    { id: 'week', name: 'Týdenní', base: 39, note: discount ? 'první týden, pak 39 Kč' : 'týdně' },
-  ].map((p) => ({ ...p, price: `${f(p.base)} Kč`, old: discount ? `${p.base} Kč` : null }));
-  const buy = () => {
-    setBusy(true);
-    setTimeout(() => {
-      setBusy(false);
-      success();
-      onUnlock(plan);
-    }, 1200);
-  };
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <SafeAreaProvider>
-        <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 16 }}>
-            <Pressable onPress={onClose} hitSlop={14} style={{ alignSelf: 'flex-end', padding: 6 }}>
-              <Text style={{ fontSize: 26, color: SUB }}>×</Text>
-            </Pressable>
-            <View style={{ alignItems: 'center' }}>
-              <AppIcon size={88} />
-              <Text style={[st.h1, { textAlign: 'center', marginTop: 20 }]}>Odemkni TAKE.IT Plus</Text>
-              <Text style={[st.sub, { textAlign: 'center' }]}>Nejlepší věci zmizí rychle. Buď u nich první.</Text>
-              {discount ? (
-                <View style={[st.discountPill, { marginTop: 14 }]}>
-                  <Text style={{ color: '#fff', fontWeight: '800' }}>🎁 Tvoje sleva −{discount} % je započítaná</Text>
-                </View>
-              ) : (
-                <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 12 }]}>
-                  💡 Daruj věc a získáš slevu až −60 %
-                </Text>
-              )}
-            </View>
-            <View style={{ marginTop: 22 }}>
-              {['Všechny věci zdarma ve tvém okolí', 'Okamžitá upozornění na nové věci', 'Rezervace jedním klepnutím', 'Bez reklam'].map((t) => (
-                <View key={t} style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 6 }}>
-                  <View style={[st.check, { backgroundColor: B, width: 26, height: 26 }]}>
-                    <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13 }}>✓</Text>
-                  </View>
-                  <Text style={{ fontSize: 17, marginLeft: 12, color: INK }}>{t}</Text>
-                </View>
-              ))}
-            </View>
-            <View style={{ marginTop: 18 }}>
-              {plans.map((p) => (
-                <Pressable
-                  key={p.id}
-                  onPress={() => {
-                    tap();
-                    setPlan(p.id);
-                  }}
-                  style={[st.plan, plan === p.id && st.planSel]}
-                >
-                  <View style={[st.radio, plan === p.id && { borderColor: B }]}>
-                    {plan === p.id ? <View style={st.radioDot} /> : null}
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={st.h2}>{p.name}</Text>
-                    <Text style={st.chartAxis}>{p.note}</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    {p.old ? <Text style={[st.strike, { marginRight: 0, fontSize: 13 }]}>{p.old}</Text> : null}
-                    <Text style={[st.h2, { color: plan === p.id ? B : INK }]}>{p.price}</Text>
-                  </View>
-                  {p.badge ? (
-                    <View style={st.planBadge}>
-                      <Text style={st.planBadgeTxt}>{p.badge}</Text>
-                    </View>
-                  ) : null}
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
-          <View style={{ paddingHorizontal: 24 }}>
-            <Button title={busy ? 'Zpracovávám…' : plan === 'year' ? 'Vyzkoušet 3 dny zdarma' : 'Pokračovat'} disabled={busy} onPress={buy} />
-            <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 10 }]}>
-              Demo – nic se neúčtuje • Obnovit nákup • Podmínky
-            </Text>
-          </View>
-        </SafeAreaView>
-      </SafeAreaProvider>
-    </Modal>
-  );
-}
-
-function LockedGrid() {
-  return (
-    <View style={Platform.OS === 'web' ? { filter: 'blur(14px)', transform: [{ scale: 1.04 }] } : { opacity: 0.9 }}>
-      <Grid items={ITEMS.slice(0, 8)} />
-    </View>
-  );
-}
-
-function Spark({ x, y, size, delay, dur, drift }) {
-  const a = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(a, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(a, { toValue: 0, duration: 0, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-  return (
-    <Animated.View
-      style={{
-        position: 'absolute',
-        left: x,
-        top: y,
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: '#fff',
-        borderWidth: 0.5,
-        borderColor: 'rgba(112,40,232,0.25)',
-        shadowColor: '#fff',
-        shadowOpacity: 1,
-        shadowRadius: 3,
-        opacity: a.interpolate({ inputRange: [0, 0.3, 0.7, 1], outputRange: [0, 1, 0.9, 0] }),
-        transform: [
-          { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, 40] }) },
-          { translateX: a.interpolate({ inputRange: [0, 1], outputRange: [0, drift] }) },
-          { scale: a.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.4, 1.2, 0.6] }) },
-        ],
-      }}
-    />
-  );
-}
-
-function Sparkles({ count = 70 }) {
-  const H = Dimensions.get('window').height;
-  const sparks = useRef(
-    Array.from({ length: count }, () => ({
-      x: Math.random() * W,
-      y: Math.random() * H * 0.75,
-      size: 1.5 + Math.random() * 3,
-      delay: Math.random() * 3000,
-      dur: 1800 + Math.random() * 2600,
-      drift: (Math.random() - 0.5) * 24,
-    }))
-  ).current;
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {sparks.map((p, i) => (
-        <Spark key={i} {...p} />
-      ))}
-    </View>
-  );
-}
-
-function LockedOverlay({ ctx, onUnlock, onSkip }) {
-  const sheet = useRef(new Animated.Value(0)).current;
-  const marquee = useRef(new Animated.Value(0)).current;
-  const glow = useRef(new Animated.Value(0)).current;
-  const [idx, setIdx] = useState(0);
-  const fade = useRef(new Animated.Value(1)).current;
-  const di = discInfo(ctx);
-  const disc = di.pct;
-  useEffect(() => {
-    Animated.spring(sheet, { toValue: 1, friction: 8, tension: 40, delay: 500, useNativeDriver: true }).start();
-    Animated.loop(Animated.timing(marquee, { toValue: 1, duration: 9000, easing: Easing.linear, useNativeDriver: true })).start();
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glow, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(glow, { toValue: 0, duration: 900, useNativeDriver: true }),
-      ])
-    ).start();
-    const t = setInterval(() => {
-      Animated.timing(fade, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
-        setIdx((i) => (i + 1) % ITEMS.length);
-        Animated.timing(fade, { toValue: 1, duration: 250, useNativeDriver: true }).start();
-      });
-    }, 2200);
-    return () => clearInterval(t);
-  }, []);
-  const it = ITEMS[idx];
-  const row = [...ITEMS, ...ITEMS];
-  const rowW = ITEMS.length * 64;
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {Platform.OS !== 'web' ? (
-        <BlurView intensity={60} tint="light" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
-      ) : null}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.35)' }]} />
-      <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(112,40,232,0.18)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
-      <Sparkles />
-      <Animated.View
-        style={[
-          st.sheet,
-          { transform: [{ translateY: sheet.interpolate({ inputRange: [0, 1], outputRange: [520, 0] }) }] },
-        ]}
-      >
-        <View style={st.sheetHandle} />
-        <Animated.View style={[st.liveRow, { opacity: fade }]}>
-          <View style={st.liveDot} />
-          <Text style={{ color: INK, fontWeight: '700' }} numberOfLines={1}>
-            Právě přidáno: {it.e} {it.t} • {it.km} km
-          </Text>
-        </Animated.View>
-        <Text style={[st.h1, { fontSize: 28, lineHeight: 34, textAlign: 'center', marginTop: 14 }]}>37 věcí zdarma čeká kolem tebe</Text>
-        <Text style={[st.sub, { textAlign: 'center' }]}>Nové přibývají každou hodinu. Odemkni seznam i mapu a buď u nich první.</Text>
-        <View style={{ height: 64, overflow: 'hidden', marginTop: 16, marginHorizontal: -24 }}>
-          <Animated.View
-            style={{ flexDirection: 'row', transform: [{ translateX: marquee.interpolate({ inputRange: [0, 1], outputRange: [0, -rowW] }) }] }}
-          >
-            {row.map((x, i) => (
-              <Thumb key={i} item={x} emojiSize={26} style={st.marqueeChip} />
-            ))}
-          </Animated.View>
-        </View>
-        {disc ? (
-          <View style={[st.discountPill, { alignSelf: 'center', marginTop: 14 }]}>
-            <Text style={{ color: '#fff', fontWeight: '800' }}>🎁 Máš slevu −{disc} % ({di.label})</Text>
-          </View>
-        ) : (
-          <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 12 }]}>💡 Daruj věc a získáš slevu až −60 %</Text>
-        )}
-        <Animated.View style={{ marginTop: 16, transform: [{ scale: glow.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] }) }] }}>
-          <Button title="Odemknout seznam a mapu" onPress={onUnlock} style={{ marginBottom: 0 }} />
-        </Animated.View>
-        {onSkip ? (
-          <Pressable onPress={onSkip} hitSlop={10}>
-            <Text style={[st.secondary, { marginTop: 14, marginBottom: 0 }]}>Teď ne</Text>
-          </Pressable>
-        ) : null}
-      </Animated.View>
-    </View>
-  );
-}
-
-function LockedFeed({ next, ctx }) {
-  const [pay, setPay] = useState(false);
-  return (
-    <View style={{ flex: 1 }}>
-      <View style={{ flex: 1, overflow: 'hidden' }}>
-        <View style={{ paddingHorizontal: 24 }} pointerEvents="none">
-          <LockedGrid />
-        </View>
-        <LockedOverlay ctx={ctx} onUnlock={() => setPay(true)} onSkip={next} />
-      </View>
-      <Paywall
-        visible={pay}
-        discount={discInfo(ctx).pct}
-        onClose={() => setPay(false)}
-        onUnlock={(pl) => {
-          setPay(false);
-          ctx.unlock(pl);
-          next();
-        }}
-      />
-    </View>
-  );
-}
-
-const TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, NotifyTake, SetupTake, GiftStep, LockedFeed];
 
 // ---------- Hlavní appka (záložky) ----------
 function Header({ title, right }) {
@@ -2421,7 +1630,7 @@ function MapPin({ item, active }) {
   );
 }
 
-function ItemsMap({ items, selected, onSelect, onOpen }) {
+function ItemsMap({ items, selected, onSelect, onOpen, center = CENTER }) {
   const card = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(card, { toValue: selected ? 1 : 0, friction: 8, useNativeDriver: true }).start();
@@ -2431,10 +1640,10 @@ function ItemsMap({ items, selected, onSelect, onOpen }) {
       {MapView ? (
         <MapView
           style={StyleSheet.absoluteFill}
-          initialRegion={{ ...CENTER, latitudeDelta: 0.06, longitudeDelta: 0.06 }}
+          initialRegion={{ ...center, latitudeDelta: 0.06, longitudeDelta: 0.06 }}
           onPress={() => onSelect(null)}
         >
-          <Marker coordinate={CENTER}>
+          <Marker coordinate={center}>
             <View style={st.meDot} />
           </Marker>
           {items.map((it) => (
@@ -2478,7 +1687,7 @@ function ItemsMap({ items, selected, onSelect, onOpen }) {
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={st.itemTitle}>{selected.t}</Text>
               <Text style={{ color: selected.badgeColor || GREEN, fontWeight: '800', marginTop: 2 }}>{selected.badge || 'Zdarma'}</Text>
-              <Text style={st.itemMeta}>{selected.demo ? `${selected.km} km • před ${selected.m} min` : 'Tvoje věc'}</Text>
+              <Text style={st.itemMeta}>{selected.own ? 'Tvoje věc' : selected.meta}</Text>
             </View>
             <Text style={{ fontSize: 26, color: B, fontWeight: '700' }}>›</Text>
           </Pressable>
@@ -2565,507 +1774,6 @@ function FiltersSheet({ visible, value, onClose, onApply, count }) {
   );
 }
 
-function HomeTab({ ctx }) {
-  const [open, setOpen] = useState(null);
-  const [q, setQ] = useState('');
-  const [f, setF] = useState({ cats: [], km: ctx.data.km || 20, sort: 'new' });
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [view, setView] = useState('list');
-  const [sel, setSel] = useState(null);
-  const [pay, setPay] = useState(false);
-  const own = ctx.myItems
-    .filter((x) => x.status !== 'given')
-    .map((x, i) => ({
-      ...x,
-      lat: CENTER.latitude - 0.002 - i * 0.0015,
-      lng: CENTER.longitude + 0.003,
-      badge: x.status === 'reserved' ? 'REZERVOVÁNO' : 'TVOJE',
-      badgeColor: x.status === 'reserved' ? '#FF9500' : B,
-    }));
-  const items = [
-    ...own,
-    ...ITEMS.map((it) =>
-      ctx.outReq[it.t] === 'accepted'
-        ? { ...it, badge: 'TVOJE 🎉', badgeColor: B }
-        : ctx.outReq[it.t] === 'pending'
-        ? { ...it, badge: 'ČEKÁ', badgeColor: '#FF9500' }
-        : it
-    ),
-  ];
-  const current = open ? items.find((x) => (x.id || x.t) === (open.id || open.t)) || null : null;
-  const disc = discInfo(ctx).pct;
-  const kmNum = (x) => parseFloat(String(x.km).replace(',', '.')) || 0;
-  const filtered = items
-    .filter((x) => {
-      if (!x.demo) return !q.trim() || x.t.toLowerCase().includes(q.trim().toLowerCase());
-      if (q.trim() && !(x.t + ' ' + (x.cat || '')).toLowerCase().includes(q.trim().toLowerCase())) return false;
-      if (f.cats.length && !f.cats.includes(x.cat)) return false;
-      if (kmNum(x) > f.km) return false;
-      return true;
-    })
-    .sort((a, b) => (!a.demo ? -1 : !b.demo ? 1 : f.sort === 'near' ? kmNum(a) - kmNum(b) : a.m - b.m));
-  const activeFilters = f.cats.length + (f.km < 20 ? 1 : 0) + (f.sort !== 'new' ? 1 : 0);
-  const quick = ['Vše', ...CATEGORIES.map(([e, c]) => c)];
-  return (
-    <View style={{ flex: 1 }}>
-      <Header />
-      {ctx.data.unlocked ? (
-        <View style={{ flex: 1 }}>
-          <View style={{ paddingHorizontal: 24 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={st.searchBox}>
-                <Text style={{ fontSize: 16 }}>🔍</Text>
-                <TextInput
-                  value={q}
-                  onChangeText={setQ}
-                  placeholder="Hledat věci…"
-                  placeholderTextColor="#9A9AA0"
-                  style={{ flex: 1, fontSize: 16, marginLeft: 8, color: INK, paddingVertical: 0 }}
-                  returnKeyType="search"
-                />
-                {q ? (
-                  <Pressable onPress={() => setQ('')} hitSlop={10}>
-                    <Text style={{ color: SUB, fontSize: 16 }}>✕</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-              <Pressable
-                onPress={() => {
-                  tap();
-                  setFiltersOpen(true);
-                }}
-                style={[st.filterBtn, activeFilters && { backgroundColor: B }]}
-              >
-                <Text style={{ fontSize: 18, color: activeFilters ? '#fff' : INK }}>⚙︎</Text>
-                {activeFilters ? (
-                  <View style={[st.bellBadge, { top: -5, right: -5 }]}>
-                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{activeFilters}</Text>
-                  </View>
-                ) : null}
-              </Pressable>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10, marginHorizontal: -24 }} contentContainerStyle={{ paddingHorizontal: 24 }}>
-              {quick.map((c) => {
-                const on = c === 'Vše' ? f.cats.length === 0 : f.cats.length === 1 && f.cats[0] === c;
-                return (
-                  <Pressable
-                    key={c}
-                    onPress={() => {
-                      tap();
-                      setF({ ...f, cats: c === 'Vše' ? [] : [c] });
-                    }}
-                    style={[st.quickChip, on && st.quickChipOn]}
-                  >
-                    <Text style={[st.quickTxt, on && { color: '#fff' }]}>{c}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 12 }}>
-              <Text style={st.chartAxis}>
-                {filtered.length} {filtered.length === 1 ? 'věc' : filtered.length < 5 ? 'věci' : 'věcí'} • do {f.km} km
-              </Text>
-              <View style={[st.segment, { marginBottom: 0, width: 190 }]}>
-                {[
-                  ['list', '☰ Seznam'],
-                  ['map', '🗺️ Mapa'],
-                ].map(([k, l]) => (
-                  <Pressable
-                    key={k}
-                    onPress={() => {
-                      tap();
-                      setView(k);
-                      setSel(null);
-                    }}
-                    style={[st.segBtn, view === k && st.segBtnOn]}
-                  >
-                    <Text style={[st.segTxt, view === k && { color: INK }]}>{l}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          </View>
-          {filtered.length === 0 ? (
-            <View style={{ alignItems: 'center', marginTop: 50, paddingHorizontal: 24 }}>
-              <Text style={{ fontSize: 48 }}>🔍</Text>
-              <Text style={[st.h2, { marginTop: 10 }]}>Nic jsme nenašli</Text>
-              <Text style={[st.chartAxis, { textAlign: 'center' }]}>Zkus jiné slovo nebo uvolni filtry.</Text>
-              <Button
-                title="Zrušit filtry"
-                light
-                style={{ marginTop: 16, paddingHorizontal: 30 }}
-                onPress={() => {
-                  setQ('');
-                  setF({ cats: [], km: 20, sort: 'new' });
-                }}
-              />
-            </View>
-          ) : view === 'list' ? (
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
-              <Grid
-                items={filtered}
-                onItem={(it) => {
-                  tap();
-                  setOpen(it);
-                }}
-              />
-            </ScrollView>
-          ) : (
-            <ItemsMap
-              items={filtered}
-              selected={sel}
-              onSelect={(it) => {
-                tap();
-                setSel(it);
-              }}
-              onOpen={(it) => setOpen(it)}
-            />
-          )}
-        </View>
-      ) : (
-        <View style={{ flex: 1, overflow: 'hidden' }}>
-          <View style={{ paddingHorizontal: 24 }} pointerEvents="none">
-            <LockedGrid />
-          </View>
-          <LockedOverlay ctx={ctx} onUnlock={() => setPay(true)} />
-        </View>
-      )}
-      <ItemDetail item={current} onClose={() => setOpen(null)} ctx={ctx} />
-      <FiltersSheet
-        visible={filtersOpen}
-        value={f}
-        count={(nf) => items.filter((x) => x.demo && (!nf.cats.length || nf.cats.includes(x.cat)) && kmNum(x) <= nf.km).length}
-        onClose={() => setFiltersOpen(false)}
-        onApply={(nf) => {
-          setF(nf);
-          setFiltersOpen(false);
-        }}
-      />
-      <Paywall
-        visible={pay}
-        discount={disc}
-        onClose={() => setPay(false)}
-        onUnlock={(pl) => {
-          setPay(false);
-          ctx.unlock(pl);
-        }}
-      />
-    </View>
-  );
-}
-
-const STATUS_TABS = [
-  ['active', 'Aktivní'],
-  ['reserved', 'Rezervované'],
-  ['given', 'Předané'],
-];
-
-function MyItemsTab({ ctx }) {
-  const [seg, setSeg] = useState('active');
-  const [open, setOpen] = useState(null);
-  const list = ctx.myItems.filter((x) => x.status === seg);
-  const current = open ? ctx.myItems.find((x) => x.id === open) || null : null;
-  const n = ctx.myItems.length;
-  const nt = nextTier(n);
-  return (
-    <View style={{ flex: 1 }}>
-      <Header title="Moje věci" />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
-        <View style={[st.chartCard, { flexDirection: 'row', alignItems: 'center', marginBottom: 16 }]}>
-          <Text style={{ fontSize: 34 }}>🎁</Text>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={st.h2}>{discountFor(n) ? `Sleva pro dárce −${discountFor(n)} %` : 'Získej slevu pro dárce'}</Text>
-            <Text style={st.chartAxis}>{nt ? `Daruj ještě ${nt.n - n} → −${nt.pct} % na TAKE.IT Plus` : 'Máš maximální slevu 🎉'}</Text>
-            <View style={[st.hTrack, { height: 8 }]}>
-              <View style={[st.hBar, { backgroundColor: B, width: `${Math.min(100, (n / 5) * 100)}%` }]} />
-            </View>
-          </View>
-        </View>
-        <View style={st.segment}>
-          {STATUS_TABS.map(([k, l]) => {
-            const c = ctx.myItems.filter((x) => x.status === k).length;
-            return (
-              <Pressable
-                key={k}
-                onPress={() => {
-                  tap();
-                  setSeg(k);
-                }}
-                style={[st.segBtn, seg === k && st.segBtnOn]}
-              >
-                <Text style={[st.segTxt, seg === k && { color: INK }]}>
-                  {l}
-                  {c ? ` ${c}` : ''}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        {list.length === 0 ? (
-          <View style={{ alignItems: 'center', marginTop: 40 }}>
-            <Text style={{ fontSize: 48 }}>{seg === 'given' ? '🤝' : '📦'}</Text>
-            <Text style={[st.h2, { marginTop: 10 }]}>{seg === 'active' ? 'Nic tu zatím není' : seg === 'reserved' ? 'Žádné rezervace' : 'Zatím nic předaného'}</Text>
-            {seg === 'active' ? <Button title="＋ Darovat věc" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={ctx.openAdd} /> : null}
-          </View>
-        ) : null}
-        {list.map((it, i) => {
-          const req = ctx.requests.filter((r) => r.itemId === it.id);
-          const pend = req.filter((r) => r.status === 'pending').length;
-          return (
-            <FadeIn key={it.id} delay={i * 60}>
-              <Pressable
-                onPress={() => {
-                  tap();
-                  setOpen(it.id);
-                }}
-                style={[st.itemCard, { flexDirection: 'row', alignItems: 'center', marginBottom: 12 }]}
-              >
-                <LinearGradient colors={it.g} style={{ width: 80, height: 80, alignItems: 'center', justifyContent: 'center' }}>
-                  {it.uri ? <Image source={{ uri: it.uri }} style={StyleSheet.absoluteFill} /> : <Text style={{ fontSize: 34 }}>{it.e}</Text>}
-                </LinearGradient>
-                <View style={{ padding: 12, flex: 1 }}>
-                  <Text style={st.itemTitle}>{it.t}</Text>
-                  <Text style={st.itemMeta}>
-                    {it.status === 'given' ? '✅ Předáno' : it.status === 'reserved' ? '🤝 Rezervováno' : `👀 ${it.views} zobrazení • 🙋 ${req.length}`}
-                  </Text>
-                  {pend ? <Text style={[st.itemMeta, { color: B, fontWeight: '800' }]}>Čeká na tebe {pend} {pend === 1 ? 'žádost' : 'žádosti'}</Text> : null}
-                </View>
-                <Text style={{ fontSize: 22, color: '#C7C7CC', marginRight: 12 }}>›</Text>
-              </Pressable>
-            </FadeIn>
-          );
-        })}
-      </ScrollView>
-      <ItemDetail item={current} onClose={() => setOpen(null)} ctx={ctx} />
-    </View>
-  );
-}
-
-function ActivityTab({ ctx }) {
-  const incoming = ctx.requests;
-  const outgoing = Object.entries(ctx.outReq);
-  return (
-    <View style={{ flex: 1 }}>
-      <Header title="Aktivita" />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
-        <Text style={st.section}>Žádosti o tvoje věci</Text>
-        {incoming.length === 0 ? (
-          <Text style={st.chartAxis}>Zatím nikdo. Jakmile se někdo přihlásí, přijde ti upozornění.</Text>
-        ) : null}
-        {[...incoming].reverse().map((r, i) => (
-          <FadeIn key={r.id} delay={i * 60} style={[st.reqCard, r.status === 'declined' && { opacity: 0.5 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={st.avatar}>
-                <Text style={{ fontSize: 24 }}>{r.e}</Text>
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={st.h2}>{r.from}</Text>
-                <Text style={st.chartAxis}>chce „{r.itemT}“ • {r.km} km • {timeAgo(r.at)}</Text>
-              </View>
-            </View>
-            <Text style={[st.body, { marginTop: 10 }]}>„{r.msg}“</Text>
-            {r.status === 'pending' ? (
-              <View style={{ flexDirection: 'row', marginTop: 12 }}>
-                <Button title="Potvrdit" style={{ flex: 1, height: 48, marginRight: 8, marginBottom: 0 }} onPress={() => ctx.accept(r.id)} />
-                <Button title="Odmítnout" light style={{ flex: 1, height: 48, marginBottom: 0 }} onPress={() => ctx.decline(r.id)} />
-              </View>
-            ) : (
-              <Text style={[st.chartAxis, { marginTop: 10, fontWeight: '700', color: r.status === 'accepted' ? GREEN : SUB }]}>
-                {r.status === 'accepted' ? '✅ Potvrzeno – poslali jsme mu tvůj kontakt' : 'Odmítnuto'}
-              </Text>
-            )}
-          </FadeIn>
-        ))}
-        <Text style={[st.section, { marginTop: 28 }]}>Tvoje žádosti</Text>
-        {outgoing.length === 0 ? <Text style={st.chartAxis}>O nic sis zatím neřekl. Klepni ve feedu na věc a dej „Mám zájem“.</Text> : null}
-        {outgoing.map(([t, stt]) => {
-          const it = ITEMS.find((x) => x.t === t);
-          return (
-            <View key={t} style={[st.reqCard, { flexDirection: 'row', alignItems: 'center' }]}>
-              {it ? <Thumb item={it} emojiSize={24} style={[st.avatar, { borderRadius: 14 }]} /> : null}
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={st.h2}>{t}</Text>
-                <Text style={[st.chartAxis, stt === 'accepted' && { color: GREEN, fontWeight: '700' }]}>
-                  {stt === 'accepted' ? '✅ Dárce potvrdil – kontakt odemčen' : '⏳ Čeká na potvrzení dárce'}
-                </Text>
-              </View>
-            </View>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-}
-
-function ProfileTab({ ctx, onRestart }) {
-  const [pay, setPay] = useState(false);
-  const given = ctx.myItems.length;
-  const gotItems = ITEMS.filter((x) => ctx.outReq[x.t] === 'accepted');
-  const got = gotItems.length;
-  const saved = gotItems.reduce((sum, x) => sum + x.v, 0);
-  const di = discInfo(ctx);
-  const disc = di.pct;
-  const plus = ctx.data.unlocked;
-  const planName = { year: 'Roční', month: 'Měsíční', week: 'Týdenní' }[ctx.data.plan] || 'Roční';
-  const renew = new Date((ctx.data.planAt || Date.now()) + ({ year: 365, month: 30, week: 7 }[ctx.data.plan] || 365) * 864e5);
-  const c = ctx.data.savedContact;
-  const name = ctx.data.name || '';
-  return (
-    <View style={{ flex: 1 }}>
-      <Header title="Profil" />
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
-        <View style={{ alignItems: 'center' }}>
-          <View style={st.bigAvatar}>
-            <Text style={{ color: '#fff', fontSize: 40, fontWeight: '900' }}>{(name.trim()[0] || '🙂').toUpperCase()}</Text>
-          </View>
-          <TextInput
-            value={name}
-            onChangeText={(v) => ctx.set('name', v)}
-            placeholder="Tvoje jméno"
-            placeholderTextColor="#B5B5BA"
-            style={[st.h1, { fontSize: 26, textAlign: 'center', marginTop: 12, minWidth: 200 }]}
-          />
-          {plus ? (
-            <View style={[st.discountPill, { marginTop: 6, paddingVertical: 4 }]}>
-              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 12 }}>✦ PLUS</Text>
-            </View>
-          ) : null}
-          <Text style={[st.chartAxis, { marginTop: 6 }]}>📍 Praha • na TAKE.IT od dneška</Text>
-          <View style={[st.pointsPill, { marginTop: 10 }]}>
-            <Text style={{ fontWeight: '900', color: B }}>⭐ {ctx.points} bodů dobra</Text>
-          </View>
-        </View>
-        <View style={{ flexDirection: 'row', marginTop: 20 }}>
-          {[
-            [given, 'darováno'],
-            [got, 'získáno'],
-            [`${kc(saved)} Kč`, 'ušetřeno'],
-          ].map(([v, l]) => (
-            <View key={l} style={st.statBox}>
-              <Text style={[st.bigNum, { fontSize: 26 }]}>{v}</Text>
-              <Text style={st.chartAxis}>{l}</Text>
-            </View>
-          ))}
-        </View>
-        <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 8, fontSize: 12 }]}>
-          ♻️ ~{(given + got) * 8} kg věcí mimo skládku • ušetřeno = odhad ceny z bazaru
-        </Text>
-
-        <Text style={st.section}>Odznaky</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-          {[
-            ['🌱', 'Nováček', !!ctx.data.welcomeGift],
-            ['🎁', 'První dar', given >= 1],
-            ['🤝', 'Dobrý soused', ctx.myItems.some((x) => x.status === 'given')],
-            ['🔎', 'Lovec pokladů', got >= 1],
-          ].map(([e, l, on]) => (
-            <View key={l} style={[st.badgeBox, !on && { opacity: 0.35 }]}>
-              <Text style={{ fontSize: 30 }}>{on ? e : '🔒'}</Text>
-              <Text style={[st.chartAxis, { color: on ? INK : SUB, fontWeight: '700', textAlign: 'center' }]}>{l}</Text>
-            </View>
-          ))}
-        </View>
-
-        <Text style={st.section}>TAKE.IT Plus</Text>
-        {plus ? (
-          <LinearGradient colors={['#7028E8', '#9B5CFF']} style={st.plusCard}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Logo size={24} color="#fff" />
-              <Text style={{ color: '#fff', fontWeight: '800' }}>✓ Aktivní</Text>
-            </View>
-            <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 16 }}>{planName} předplatné</Text>
-            <Text style={{ color: '#EDE5FF', marginTop: 4 }}>
-              Obnovení {renew.getDate()}. {renew.getMonth() + 1}. {renew.getFullYear()}
-              {disc ? ` • sleva pro dárce −${disc} %` : ''}
-            </Text>
-            <View style={st.plusStat}>
-              <Text style={{ color: '#fff', fontWeight: '700' }}>Díky Plus jsi ušetřil</Text>
-              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 28 }}>{kc(saved)} Kč</Text>
-            </View>
-            <Pressable
-              onPress={() => Alert.alert('Předplatné', 'V ostré verzi se tady otevře správa předplatného v App Store.')}
-              hitSlop={8}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center', marginTop: 14, textDecorationLine: 'underline' }}>
-                Spravovat předplatné
-              </Text>
-            </Pressable>
-          </LinearGradient>
-        ) : null}
-        {gotItems.length ? (
-          <>
-            <Text style={st.section}>Získané věci</Text>
-            {gotItems.map((x) => (
-              <View key={x.t} style={[st.reqCard, { flexDirection: 'row', alignItems: 'center' }]}>
-                <Thumb item={x} emojiSize={24} style={[st.avatar, { borderRadius: 14 }]} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={st.h2}>{x.t}</Text>
-                  <Text style={st.chartAxis}>od souseda • {x.km} km</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={[st.strike, { marginRight: 0 }]}>{kc(x.v)} Kč</Text>
-                  <Text style={st.zero}>0 Kč</Text>
-                </View>
-              </View>
-            ))}
-          </>
-        ) : null}
-        {plus ? null : (
-        <View style={st.chartCard}>
-          <Text style={st.h2}>{ctx.data.unlocked ? '✅ Aktivní' : 'Neaktivní'}</Text>
-          <Text style={st.chartAxis}>
-            {disc ? `Tvoje sleva: −${disc} % (${di.label})` : 'Daruj první věc a získáš −20 %'}
-            {nextTier(given) ? ` • další stupeň za ${nextTier(given).n - given} ${nextTier(given).n - given === 1 ? 'věc' : 'věci'}` : ''}
-          </Text>
-          <Button title="Aktivovat" style={{ marginTop: 12, marginBottom: 0 }} onPress={() => setPay(true)} />
-        </View>
-        )}
-
-        <Text style={st.section}>Kontakt pro zájemce</Text>
-        <View style={st.chartCard}>
-          {c ? (
-            <>
-              <Text style={{ fontSize: 22 }}>{CONTACTS.filter((x) => c.methods.includes(x.id)).map((x) => x.e).join('  ')}</Text>
-              {c.phone && c.phone.length > 5 ? <Text style={st.chartAxis}>📱 {c.phone}</Text> : null}
-              {c.messenger ? <Text style={st.chartAxis} numberOfLines={1}>⚡ {c.messenger}</Text> : null}
-              <Text style={[st.chartAxis, { marginTop: 6 }]}>Předvyplní se u každé další věci.</Text>
-            </>
-          ) : (
-            <Text style={st.chartAxis}>Uloží se, až přidáš první věc.</Text>
-          )}
-        </View>
-
-        <Text style={st.section}>Nastavení</Text>
-        <View style={[st.chartCard, { paddingVertical: 4 }]}>
-          {[
-            ['📍', 'Okruh', `${ctx.data.km || 5} km`],
-            ['🏷️', 'Kategorie', ctx.data.cats && ctx.data.cats.length ? `${ctx.data.cats.length} vybráno` : 'Vše'],
-            ['🔔', 'Upozornění', `${ctx.data.notify ?? 3}× denně`],
-            ['🔒', 'Soukromí', 'Kontakt jen po potvrzení'],
-          ].map(([e, l, v], i) => (
-            <View key={l} style={[st.settingRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#E8E8ED' }]}>
-              <Text style={{ fontSize: 18 }}>{e}</Text>
-              <Text style={[st.body, { flex: 1, marginLeft: 12 }]}>{l}</Text>
-              <Text style={st.chartAxis}>{v}</Text>
-            </View>
-          ))}
-        </View>
-        <Pressable onPress={onRestart} hitSlop={10}>
-          <Text style={[st.secondary, { marginTop: 24, color: '#FF3B30' }]}>Resetovat demo</Text>
-        </Pressable>
-      </ScrollView>
-      <Paywall
-        visible={pay}
-        discount={disc}
-        onClose={() => setPay(false)}
-        onUnlock={(pl) => {
-          setPay(false);
-          ctx.unlock(pl);
-        }}
-      />
-    </View>
-  );
-}
 
 const TABS = [
   ['home', '🏠', 'Domů'],
@@ -3075,8 +1783,8 @@ const TABS = [
   ['profile', '👤', 'Profil'],
 ];
 
-function MainApp({ ctx, onRestart }) {
-  const pending = ctx.requests.filter((r) => r.status === 'pending').length;
+function MainApp({ ctx }) {
+  const pending = ctx.incoming.filter((r) => r.status === 'pending').length;
   const tab = ctx.tab;
   return (
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
@@ -3084,7 +1792,7 @@ function MainApp({ ctx, onRestart }) {
         {tab === 'home' ? <HomeTab ctx={ctx} /> : null}
         {tab === 'mine' ? <MyItemsTab ctx={ctx} /> : null}
         {tab === 'activity' ? <ActivityTab ctx={ctx} /> : null}
-        {tab === 'profile' ? <ProfileTab ctx={ctx} onRestart={onRestart} /> : null}
+        {tab === 'profile' ? <ProfileTab ctx={ctx} /> : null}
       </View>
       <View style={st.tabBar}>
         {TABS.map(([k, e, l]) =>
@@ -3147,175 +1855,1213 @@ function AddItemModal({ ctx }) {
   );
 }
 
-// ---------- Root ----------
-const NEIGHBORS = [
-  { from: 'Petr', e: '👨‍🦰', km: '0,8', msg: 'Ahoj, můžu si to vyzvednout dnes v 18:00?', delay: 5000 },
-  { from: 'Jana', e: '👩', km: '1,4', msg: 'Dobrý den, mám zájem, bydlím kousek od vás 🙂', delay: 13000 },
+
+// ---------- Mapa sousedů v onboardingu (bez vymyšlených dat) ----------
+function NeighborsMap({ next, ctx }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  const center = ctx.loc || CENTER;
+  useEffect(() => {
+    Animated.loop(Animated.timing(pulse, { toValue: 1, duration: 2000, easing: Easing.out(Easing.quad), useNativeDriver: true })).start();
+  }, []);
+  return (
+    <View style={{ flex: 1 }}>
+      <MapView
+        style={StyleSheet.absoluteFill}
+        initialRegion={{ ...center, latitudeDelta: 0.06, longitudeDelta: 0.06 }}
+        scrollEnabled={false}
+        zoomEnabled={false}
+      >
+        <MapCircle center={center} radius={2500} fillColor="rgba(112,40,232,0.15)" strokeColor={B} strokeWidth={2} />
+        <Marker coordinate={center}>
+          <PopIn>
+            <PinBubble />
+          </PopIn>
+        </Marker>
+      </MapView>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+        <Animated.View
+          style={{
+            width: 220,
+            height: 220,
+            borderRadius: 110,
+            backgroundColor: B,
+            opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0] }),
+            transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1.4] }) }],
+          }}
+        />
+      </View>
+      <LinearGradient colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0)']} style={{ paddingHorizontal: 24, paddingBottom: 60 }} pointerEvents="none">
+        <FadeIn>
+          <Text style={st.h1}>Darování funguje kolem tebe</Text>
+          <Text style={[st.sub, { color: INK }]}>Tvoje věci uvidí sousedé v okolí – a ty zase jejich.</Text>
+        </FadeIn>
+      </LinearGradient>
+      <View style={{ position: 'absolute', left: 24, right: 24, bottom: 0 }}>
+        <Button title="Pokračovat" onPress={next} />
+      </View>
+    </View>
+  );
+}
+
+function TakeDone({ next }) {
+  return (
+    <StepLayout title="Hotovo, můžeš začít" subtitle="Ukážeme ti věci zdarma kolem tebe. Když něco najdeš, klepni na „Mám zájem“." cta="Ukázat věci kolem mě" onNext={next} center>
+      <View style={{ alignItems: 'center' }}>
+        <PopIn>
+          <Text style={{ fontSize: 120 }}>📍</Text>
+        </PopIn>
+      </View>
+    </StepLayout>
+  );
+}
+
+// ---------- Přihlášení přes Apple ----------
+function LoginSheet({ visible, onClose, onSuccess }) {
+  const [busy, setBusy] = useState(false);
+  const [avail, setAvail] = useState(Platform.OS === 'ios');
+  useEffect(() => {
+    api.appleAvailable().then(setAvail);
+  }, []);
+  const go = async () => {
+    try {
+      setBusy(true);
+      const session = await api.signInWithApple();
+      success();
+      onSuccess(session);
+    } catch (e) {
+      if (e && e.code !== 'ERR_REQUEST_CANCELED') Alert.alert('Přihlášení se nepovedlo', String(e.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: '#fff', padding: 24, justifyContent: 'center' }}>
+        <Pressable onPress={onClose} hitSlop={12} style={{ position: 'absolute', top: 20, right: 24 }}>
+          <Text style={{ fontSize: 17, color: B, fontWeight: '700' }}>Zavřít</Text>
+        </Pressable>
+        <View style={{ alignItems: 'center' }}>
+          <AppIcon size={96} />
+          <Text style={[st.h1, { textAlign: 'center', marginTop: 24, fontSize: 30 }]}>Přihlas se jedním klepnutím</Text>
+          <Text style={[st.sub, { textAlign: 'center' }]}>
+            Potřebujeme to, aby žádosti a kontakty došly správnému člověku. Žádné heslo, žádný e-mail navíc.
+          </Text>
+        </View>
+        <View style={{ marginTop: 36, alignItems: 'center' }}>
+          {avail ? (
+            busy ? (
+              <ActivityIndicator color={B} />
+            ) : (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={28}
+                style={{ width: W - 48, height: 56 }}
+                onPress={go}
+              />
+            )
+          ) : (
+            <Text style={[st.chartAxis, { textAlign: 'center' }]}>Přihlášení na tomhle zařízení zatím nejde. Verze pro Android bude brzy.</Text>
+          )}
+        </View>
+        <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 20, fontSize: 12 }]}>
+          Pokračováním souhlasíš s{' '}
+          <Text style={{ color: B, fontWeight: '700' }} onPress={() => Linking.openURL(TERMS_URL)}>podmínkami</Text> a{' '}
+          <Text style={{ color: B, fontWeight: '700' }} onPress={() => Linking.openURL(PRIVACY_URL)}>zásadami ochrany soukromí</Text>.
+        </Text>
+      </View>
+    </Modal>
+  );
+}
+
+// ---------- Přidání věci ----------
+function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideSkip }) {
+  const saved = ctx.contact || {};
+  const [photos, setPhotos] = useState([]);
+  const [title, setTitle] = useState('');
+  const [desc, setDesc] = useState('');
+  const [cat, setCat] = useState(null);
+  const [chip, setChip] = useState('U dveří');
+  const [methods, setMethods] = useState((saved.methods && saved.methods.length ? saved.methods : ['whatsapp']).filter((m) => CONTACTS.some((c) => c.id === m)));
+  const [phone, setPhone] = useState(saved.phone || '+420 ');
+  const [messenger, setMessenger] = useState(saved.messenger || '');
+  const [busy, setBusy] = useState(false);
+  const pick = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 5, quality: 0.8 });
+      if (!res.canceled) setPhotos([...photos, ...res.assets.map((a) => a.uri)].slice(0, 5));
+    } catch (e) {
+      Alert.alert('Fotky', 'Nepodařilo se otevřít galerii.');
+    }
+  };
+  const toggle = (id) => setMethods(methods.includes(id) ? methods.filter((m) => m !== id) : [...methods, id]);
+  const needPhone = methods.some((m) => ['whatsapp', 'phone', 'sms'].includes(m));
+  const needMessenger = methods.includes('messenger');
+  const phoneOk = !needPhone || phone.replace(/[^0-9]/g, '').length >= 9;
+  const messengerOk = !needMessenger || isFbLink(messenger);
+  const valid = title.trim().length >= 2 && photos.length > 0 && cat && methods.length > 0 && phoneOk && messengerOk;
+  const chips = [['🚪', 'U dveří'], ['🕒', 'Kdykoli dnes'], ['📦', 'Před domem']];
+  const publish = () =>
+    ctx.requireLogin(async (uid) => {
+      try {
+        setBusy(true);
+        const contact = { methods, phone: needPhone ? phone.trim() : '', messenger: needMessenger ? messenger.trim() : '' };
+        await api.saveContact(uid, contact);
+        const loc = ctx.loc || CENTER;
+        await api.createItem(uid, { title: title.trim(), description: desc.trim(), category: cat, pickup: chip, photos, lat: loc.latitude, lng: loc.longitude });
+        await ctx.refresh();
+        success();
+        next();
+      } catch (e) {
+        Alert.alert('Nepovedlo se zveřejnit', String(e.message || e));
+      } finally {
+        setBusy(false);
+      }
+    });
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
+        <FadeIn>
+          <Text style={[st.h1, { fontSize: 28, lineHeight: 34 }]}>{heading}</Text>
+        </FadeIn>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 14 }}>
+          <Pressable onPress={pick} style={st.addPhoto}>
+            <Text style={{ fontSize: 26 }}>📷</Text>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: SUB, marginTop: 2 }}>{photos.length ? `${photos.length}/5` : 'Přidat'}</Text>
+          </Pressable>
+          {photos.map((u, k) => (
+            <Pressable key={u} onLongPress={() => setPhotos(photos.filter((x) => x !== u))}>
+              <Image source={{ uri: u }} style={st.smallThumb} />
+              {k === 0 ? (
+                <View style={st.coverTag}>
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>Titulní</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          ))}
+        </ScrollView>
+        <TextInput value={title} onChangeText={setTitle} placeholder="Co daruješ?" placeholderTextColor="#B5B5BA" maxLength={80} style={[st.input, st.inputSm]} />
+        <TextInput
+          value={desc}
+          onChangeText={setDesc}
+          placeholder="Stav, velikost, poznámka…"
+          placeholderTextColor="#B5B5BA"
+          maxLength={1000}
+          style={[st.input, st.inputSm, { height: 64, textAlignVertical: 'top' }]}
+          multiline
+        />
+        <Text style={st.label}>Kategorie</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {CATEGORIES.map(([e, c]) => (
+            <Pressable
+              key={c}
+              onPress={() => {
+                tap();
+                setCat(c);
+              }}
+              style={[st.chipSm, cat === c && st.chipSel]}
+            >
+              <Text style={[st.chipSmTxt, cat === c && { color: '#fff' }]}>{e} {c}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        <Text style={st.label}>Vyzvednutí</Text>
+        <View style={{ flexDirection: 'row' }}>
+          {chips.map(([e, l]) => (
+            <Pressable
+              key={l}
+              onPress={() => {
+                tap();
+                setChip(l);
+              }}
+              style={[st.chipSm, chip === l && st.chipSel]}
+            >
+              <Text style={[st.chipSmTxt, chip === l && { color: '#fff' }]} numberOfLines={1}>{e} {l}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={st.label}>Jak tě můžou kontaktovat?</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          {CONTACTS.map((c) => {
+            const on = methods.includes(c.id);
+            return (
+              <Pressable
+                key={c.id}
+                onPress={() => {
+                  tap();
+                  toggle(c.id);
+                }}
+                style={{ alignItems: 'center', width: (W - 48) / 4 }}
+              >
+                <View style={[st.contactCircle, on && { backgroundColor: c.color, borderColor: c.color }]}>
+                  <Text style={{ fontSize: 24 }}>{c.e}</Text>
+                </View>
+                <Text style={[st.contactTxt, { marginTop: 4 }, on && { color: INK }]}>{c.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {needPhone ? (
+          <TextInput value={phone} onChangeText={setPhone} placeholder="Telefonní číslo" placeholderTextColor="#B5B5BA" keyboardType="phone-pad" style={[st.input, st.inputSm, !phoneOk && phone.length > 5 && st.inputErr]} />
+        ) : null}
+        {needMessenger ? (
+          <TextInput
+            value={messenger}
+            onChangeText={setMessenger}
+            placeholder="Odkaz na Facebook profil (facebook.com/…)"
+            placeholderTextColor="#B5B5BA"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            style={[st.input, st.inputSm, !messengerOk && messenger.length > 3 && st.inputErr]}
+          />
+        ) : null}
+        <Text style={[st.chartAxis, { marginTop: 8, fontSize: 12 }]}>🔒 Kontakt uvidí jen ten, koho potvrdíš. Poloha se ukazuje jen přibližně.</Text>
+      </ScrollView>
+      <View style={{ paddingHorizontal: 24, paddingTop: 6 }}>
+        {hideSkip ? null : (
+          <Pressable onPress={next} hitSlop={10}>
+            <Text style={[st.secondary, { marginBottom: 12, fontSize: 15 }]}>Udělám to později</Text>
+          </Pressable>
+        )}
+        <Button title={busy ? 'Nahrávám…' : 'Zveřejnit'} disabled={!valid || busy} onPress={publish} />
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ---------- Detail věci ----------
+const REPORT_REASONS = ['Nevhodný obsah', 'Podvod nebo spam', 'Věc se prodává', 'Zakázaná věc', 'Jiný důvod'];
+
+function ItemDetail({ item, onClose, ctx }) {
+  const [asking, setAsking] = useState(false);
+  const [msg, setMsg] = useState('Ahoj, můžu si to vyzvednout dnes večer?');
+  const [contact, setContact] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const status = item ? ctx.outgoing[item.id] : null;
+  useEffect(() => {
+    setAsking(false);
+    setContact(null);
+    if (!item) return;
+    if (!item.own && ctx.myId) api.incrementView(item.id);
+  }, [item && item.id]);
+  useEffect(() => {
+    if (item && (item.own || status === 'accepted')) api.getContact(item.id).then(setContact).catch(() => {});
+  }, [item && item.id, status]);
+  if (!item) return null;
+  const own = item.own;
+  const incoming = ctx.incoming.filter((r) => r.item_id === item.id);
+  const pending = incoming.filter((r) => r.status === 'pending').length;
+  const methods = (contact && contact.methods) || [];
+  const lat = item.lat || CENTER.latitude;
+  const lng = item.lng || CENTER.longitude;
+  const share = () => Share.share({ message: `Na TAKE.it je zdarma „${item.t}“ 🎁 Mrkni do appky!` }).catch(() => {});
+  const more = () => {
+    if (own) return;
+    Alert.alert(item.t, null, [
+      {
+        text: 'Nahlásit inzerát',
+        onPress: () =>
+          Alert.alert('Proč ho hlásíš?', null, [
+            ...REPORT_REASONS.map((r) => ({ text: r, onPress: () => ctx.report(item, r) })),
+            { text: 'Zrušit', style: 'cancel' },
+          ]),
+      },
+      {
+        text: `Zablokovat uživatele ${item.owner_name}`,
+        style: 'destructive',
+        onPress: () => {
+          ctx.block(item.owner_id);
+          onClose();
+        },
+      },
+      { text: 'Zrušit', style: 'cancel' },
+    ]);
+  };
+  const send = () =>
+    ctx.requireLogin(async (uid) => {
+      try {
+        setBusy(true);
+        await ctx.requestItem(item, msg.trim(), uid);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+  let footer = null;
+  if (own) {
+    footer =
+      item.status === 'reserved' ? (
+        <Button title="Označit jako předané ✅" style={{ marginBottom: 0 }} onPress={() => { ctx.markGiven(item.id); onClose(); }} />
+      ) : pending ? (
+        <Button title={`Zobrazit zájemce (${pending})`} style={{ marginBottom: 0 }} onPress={() => { onClose(); ctx.openInbox(); }} />
+      ) : null;
+  } else if (status === 'accepted') {
+    footer = methods.length ? (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+        {CONTACTS.filter((c) => methods.includes(c.id)).map((c) => (
+          <Pressable
+            key={c.id}
+            onPress={() => {
+              tap();
+              openContact(c.id, item, contact);
+            }}
+            style={({ pressed }) => [st.contactBtn, { backgroundColor: c.color, flex: 1, marginHorizontal: 4, marginTop: 0 }, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={{ fontSize: 18 }}>{c.e}</Text>
+            <Text style={[st.contactBtnTxt, { fontSize: 15 }]}>{c.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    ) : (
+      <ActivityIndicator color={B} />
+    );
+  } else if (status === 'pending') {
+    footer = (
+      <View style={[st.statusCard, { flexDirection: 'row', justifyContent: 'center', paddingVertical: 16 }]}>
+        <ActivityIndicator color={B} />
+        <Text style={[st.h2, { marginLeft: 10, fontSize: 16 }]}>Čekáme na potvrzení dárce…</Text>
+      </View>
+    );
+  } else if (status === 'declined') {
+    footer = (
+      <View style={[st.statusCard, { paddingVertical: 16 }]}>
+        <Text style={[st.h2, { fontSize: 16 }]}>Dárce vybral někoho jiného</Text>
+      </View>
+    );
+  } else if (item.status !== 'active') {
+    footer = (
+      <View style={[st.statusCard, { paddingVertical: 16 }]}>
+        <Text style={[st.h2, { fontSize: 16 }]}>Už je zamluvená</Text>
+      </View>
+    );
+  } else if (asking) {
+    footer = <Button title={busy ? 'Odesílám…' : 'Odeslat žádost'} disabled={!msg.trim() || busy} style={{ marginBottom: 0 }} onPress={send} />;
+  } else {
+    footer = <Button title="🙋  Mám zájem" style={{ marginBottom: 0 }} onPress={() => setAsking(true)} />;
+  }
+
+  return (
+    <Modal visible={!!item} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#fff' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
+          <View>
+            <Gallery item={item} height={340} />
+            <View style={st.detailTopBar}>
+              <Pressable onPress={onClose} hitSlop={10} style={st.roundBtn} accessibilityLabel="Zavřít">
+                <Text style={{ fontSize: 18, color: INK }}>✕</Text>
+              </Pressable>
+              <View style={{ flexDirection: 'row' }}>
+                <Pressable onPress={share} hitSlop={10} style={[st.roundBtn, { marginRight: 10 }]} accessibilityLabel="Sdílet">
+                  <Text style={{ fontSize: 17 }}>↗︎</Text>
+                </Pressable>
+                {!own ? (
+                  <Pressable onPress={more} hitSlop={10} style={st.roundBtn} accessibilityLabel="Další možnosti">
+                    <Text style={{ fontSize: 20, fontWeight: '900', marginTop: -6 }}>…</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          </View>
+
+          <View style={{ padding: 24 }}>
+            <Text style={st.h1}>{item.t}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 }}>
+              <View style={[st.metaChip, { backgroundColor: '#DDF7E5' }]}>
+                <Text style={{ color: GREEN, fontWeight: '900' }}>ZDARMA</Text>
+              </View>
+              <View style={st.metaChip}>
+                <Text style={st.metaTxt}>📍 {own ? 'Tvoje věc' : item.kmText}</Text>
+              </View>
+              <View style={st.metaChip}>
+                <Text style={st.metaTxt}>🕒 {ago(item.created_at)}</Text>
+              </View>
+              {item.chip ? (
+                <View style={st.metaChip}>
+                  <Text style={st.metaTxt}>🚪 {item.chip}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={st.donorCard}>
+              <View style={st.avatar}>
+                <Text style={{ fontSize: 20, fontWeight: '900', color: B }}>{(item.owner_name || '?').trim()[0].toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={st.h2}>{own ? 'Tvoje věc' : item.owner_name}</Text>
+                <Text style={st.chartAxis}>{own ? `👀 ${item.views} zobrazení` : 'Daruje přes TAKE.it'}</Text>
+              </View>
+            </View>
+
+            {item.d ? (
+              <>
+                <Text style={st.section}>Popis</Text>
+                <Text style={st.body}>{item.d}</Text>
+              </>
+            ) : null}
+
+            <Text style={st.section}>Kde to je</Text>
+            <View style={st.miniMap}>
+              <MapView
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+                initialRegion={{ latitude: lat, longitude: lng, latitudeDelta: 0.025, longitudeDelta: 0.025 }}
+                scrollEnabled={false}
+                zoomEnabled={false}
+              >
+                <MapCircle center={{ latitude: lat, longitude: lng }} radius={600} fillColor="rgba(112,40,232,0.18)" strokeColor={B} strokeWidth={2} />
+              </MapView>
+            </View>
+            <Text style={[st.chartAxis, { marginTop: 8 }]}>🔒 Přesné místo ti dárce pošle až po potvrzení.</Text>
+
+            {own ? (
+              <View style={[st.chartCard, { marginTop: 22 }]}>
+                <Text style={st.h2}>Stav</Text>
+                <Text style={st.chartAxis}>
+                  {item.status === 'given'
+                    ? '✅ Předáno – díky, že posíláš věci dál!'
+                    : item.status === 'reserved'
+                    ? '🤝 Rezervováno – zájemce dostal tvůj kontakt.'
+                    : incoming.length
+                    ? `🙋 ${incoming.length} zájemci${pending ? ` • čeká ${pending}` : ''}`
+                    : 'Zatím bez zájemců. Jakmile se někdo ozve, přijde ti upozornění.'}
+                </Text>
+                {item.status !== 'given' ? (
+                  <Pressable
+                    onPress={() =>
+                      Alert.alert('Smazat inzerát?', 'Tohle nejde vrátit.', [
+                        { text: 'Zrušit', style: 'cancel' },
+                        { text: 'Smazat', style: 'destructive', onPress: () => { ctx.deleteItem(item.id); onClose(); } },
+                      ])
+                    }
+                    hitSlop={10}
+                  >
+                    <Text style={[st.secondary, { marginTop: 14, marginBottom: 0, color: '#FF3B30', textAlign: 'left' }]}>Smazat inzerát</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
+            {!own && status === 'accepted' ? (
+              <View style={[st.statusCard, { marginTop: 22, backgroundColor: '#DDF7E5' }]}>
+                <Text style={st.h2}>✅ Dárce potvrdil – je to tvoje!</Text>
+                <Text style={st.chartAxis}>Kontakt je odemčený, ozvi se mu tlačítkem dole.</Text>
+              </View>
+            ) : null}
+
+            {!own && !status && asking ? (
+              <FadeIn style={{ marginTop: 22 }}>
+                <Text style={st.section}>Zpráva pro {item.owner_name}</Text>
+                <TextInput value={msg} onChangeText={setMsg} multiline autoFocus maxLength={500} style={[st.input, { height: 90, textAlignVertical: 'top' }]} />
+              </FadeIn>
+            ) : null}
+            {!own && !status && !asking && item.status === 'active' ? (
+              <Text style={[st.chartAxis, { marginTop: 18 }]}>🔒 Kontakt na dárce se odemkne, až potvrdí tvoji žádost.</Text>
+            ) : null}
+          </View>
+        </ScrollView>
+        {footer ? <View style={st.stickyFooter}>{footer}</View> : null}
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ---------- Po zveřejnění ----------
+function Given({ ctx, onContinue }) {
+  const item = ctx.myItems[0];
+  return (
+    <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
+      <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
+        <FadeIn style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 64 }}>🎉</Text>
+          <Text style={[st.h1, { textAlign: 'center' }]}>{item ? 'Tvoje věc je venku!' : 'Vše nastaveno!'}</Text>
+          <Text style={[st.sub, { textAlign: 'center' }]}>
+            {item ? 'Dáme ti vědět, jakmile si o ni někdo řekne.' : 'Věc můžeš přidat kdykoli tlačítkem ＋ dole.'}
+          </Text>
+        </FadeIn>
+        {item ? (
+          <FadeIn delay={250} style={[st.itemCard, { marginTop: 24, flexDirection: 'row', alignItems: 'center' }]}>
+            <Thumb item={item} emojiSize={40} style={{ width: 88, height: 88 }} />
+            <View style={{ padding: 14, flex: 1 }}>
+              <Text style={st.itemTitle}>{item.t}</Text>
+              <Text style={{ color: GREEN, fontWeight: '800', marginTop: 4 }}>Zdarma</Text>
+              <Text style={st.itemMeta}>{item.cat} • {item.chip}</Text>
+            </View>
+          </FadeIn>
+        ) : null}
+      </View>
+      <View style={{ paddingHorizontal: 24 }}>
+        <Button title="Pokračovat do appky" onPress={onContinue} />
+      </View>
+    </SafeAreaView>
+  );
+}
+
+// ---------- Domů ----------
+function HomeTab({ ctx }) {
+  const [open, setOpen] = useState(null);
+  const [q, setQ] = useState('');
+  const [f, setF] = useState({ cats: [], km: ctx.data.km || 20, sort: 'new' });
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [view, setView] = useState('list');
+  const [sel, setSel] = useState(null);
+  const items = ctx.feed.map((x) =>
+    x.own
+      ? { ...x, badge: x.status === 'reserved' ? 'REZERVOVÁNO' : 'TVOJE', badgeColor: x.status === 'reserved' ? '#FF9500' : B }
+      : ctx.outgoing[x.id] === 'accepted'
+      ? { ...x, badge: 'TVOJE 🎉', badgeColor: B }
+      : ctx.outgoing[x.id] === 'pending'
+      ? { ...x, badge: 'ČEKÁ', badgeColor: '#FF9500' }
+      : x.status === 'reserved'
+      ? { ...x, badge: 'ZAMLUVENO', badgeColor: SUB }
+      : x
+  );
+  const current = open ? items.find((x) => x.id === open.id) || open : null;
+  const dist = (x) => (x.distance == null ? 0 : x.distance);
+  const matches = (x, nf) => (!nf.cats.length || nf.cats.includes(x.cat)) && dist(x) <= nf.km;
+  const filtered = items
+    .filter((x) => {
+      if (q.trim() && !(x.t + ' ' + (x.cat || '') + ' ' + (x.d || '')).toLowerCase().includes(q.trim().toLowerCase())) return false;
+      return x.own || matches(x, f);
+    })
+    .sort((a, b) => (f.sort === 'near' ? dist(a) - dist(b) : new Date(b.created_at) - new Date(a.created_at)));
+  const activeFilters = f.cats.length + (f.km < 20 ? 1 : 0) + (f.sort !== 'new' ? 1 : 0);
+  const quick = ['Vše', ...CATEGORIES.map(([e, c]) => c)];
+  return (
+    <View style={{ flex: 1 }}>
+      <Header />
+      <View style={{ paddingHorizontal: 24 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={st.searchBox}>
+            <Text style={{ fontSize: 16 }}>🔍</Text>
+            <TextInput value={q} onChangeText={setQ} placeholder="Hledat věci…" placeholderTextColor="#9A9AA0" style={{ flex: 1, fontSize: 16, marginLeft: 8, color: INK, paddingVertical: 0 }} returnKeyType="search" />
+            {q ? (
+              <Pressable onPress={() => setQ('')} hitSlop={10} accessibilityLabel="Smazat hledání">
+                <Text style={{ color: SUB, fontSize: 16 }}>✕</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <Pressable
+            onPress={() => {
+              tap();
+              setFiltersOpen(true);
+            }}
+            style={[st.filterBtn, activeFilters ? { backgroundColor: B } : null]}
+            accessibilityLabel="Filtry"
+          >
+            <Text style={{ fontSize: 18, color: activeFilters ? '#fff' : INK }}>⚙︎</Text>
+            {activeFilters ? (
+              <View style={[st.bellBadge, { top: -5, right: -5 }]}>
+                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{activeFilters}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10, marginHorizontal: -24 }} contentContainerStyle={{ paddingHorizontal: 24 }}>
+          {quick.map((c) => {
+            const on = c === 'Vše' ? f.cats.length === 0 : f.cats.length === 1 && f.cats[0] === c;
+            return (
+              <Pressable
+                key={c}
+                onPress={() => {
+                  tap();
+                  setF({ ...f, cats: c === 'Vše' ? [] : [c] });
+                }}
+                style={[st.quickChip, on && st.quickChipOn]}
+              >
+                <Text style={[st.quickTxt, on && { color: '#fff' }]}>{c}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 12 }}>
+          <Text style={st.chartAxis}>
+            {filtered.length} {filtered.length === 1 ? 'věc' : filtered.length < 5 && filtered.length > 0 ? 'věci' : 'věcí'} • do {f.km} km
+          </Text>
+          <View style={[st.segment, { marginBottom: 0, width: 190 }]}>
+            {[
+              ['list', '☰ Seznam'],
+              ['map', '🗺️ Mapa'],
+            ].map(([k, l]) => (
+              <Pressable
+                key={k}
+                onPress={() => {
+                  tap();
+                  setView(k);
+                  setSel(null);
+                }}
+                style={[st.segBtn, view === k && st.segBtnOn]}
+              >
+                <Text style={[st.segTxt, view === k && { color: INK }]}>{l}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </View>
+      {view === 'map' ? (
+        <ItemsMap
+          items={filtered}
+          center={ctx.loc || CENTER}
+          selected={sel}
+          onSelect={(it) => {
+            tap();
+            setSel(it);
+          }}
+          onOpen={(it) => setOpen(it)}
+        />
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={ctx.refreshing} onRefresh={ctx.refresh} tintColor={B} />}
+        >
+          {ctx.loadingFeed && !items.length ? (
+            <ActivityIndicator color={B} style={{ marginTop: 40 }} />
+          ) : filtered.length === 0 ? (
+            <View style={{ alignItems: 'center', marginTop: 40 }}>
+              <Text style={{ fontSize: 48 }}>{items.length ? '🔍' : '🌱'}</Text>
+              <Text style={[st.h2, { marginTop: 10, textAlign: 'center' }]}>{items.length ? 'Nic jsme nenašli' : 'Kolem tebe zatím nic není'}</Text>
+              <Text style={[st.chartAxis, { textAlign: 'center' }]}>
+                {items.length ? 'Zkus jiné slovo nebo uvolni filtry.' : 'Buď první, kdo tu něco daruje – sousedé to uvidí.'}
+              </Text>
+              {items.length ? (
+                <Button title="Zrušit filtry" light style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={() => { setQ(''); setF({ cats: [], km: 20, sort: 'new' }); }} />
+              ) : (
+                <Button title="＋ Darovat věc" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={ctx.openAdd} />
+              )}
+            </View>
+          ) : (
+            <Grid
+              items={filtered}
+              onItem={(it) => {
+                tap();
+                setOpen(it);
+              }}
+            />
+          )}
+        </ScrollView>
+      )}
+      <ItemDetail item={current} onClose={() => setOpen(null)} ctx={ctx} />
+      <FiltersSheet
+        visible={filtersOpen}
+        value={f}
+        count={(nf) => items.filter((x) => !x.own && matches(x, nf)).length}
+        onClose={() => setFiltersOpen(false)}
+        onApply={(nf) => {
+          setF(nf);
+          setFiltersOpen(false);
+        }}
+      />
+    </View>
+  );
+}
+
+// ---------- Moje věci ----------
+const STATUS_TABS = [
+  ['active', 'Aktivní'],
+  ['reserved', 'Rezervované'],
+  ['given', 'Předané'],
 ];
 
+function MyItemsTab({ ctx }) {
+  const [seg, setSeg] = useState('active');
+  const [open, setOpen] = useState(null);
+  const list = ctx.myItems.filter((x) => x.status === seg);
+  const current = open ? ctx.myItems.find((x) => x.id === open) || null : null;
+  if (!ctx.myId) {
+    return (
+      <View style={{ flex: 1 }}>
+        <Header title="Moje věci" />
+        <LoginPrompt ctx={ctx} text="Přihlas se a daruj první věc. Tady pak uvidíš její stav a zájemce." />
+      </View>
+    );
+  }
+  return (
+    <View style={{ flex: 1 }}>
+      <Header title="Moje věci" />
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}
+        refreshControl={<RefreshControl refreshing={ctx.refreshing} onRefresh={ctx.refresh} tintColor={B} />}
+      >
+        <View style={st.segment}>
+          {STATUS_TABS.map(([k, l]) => {
+            const c = ctx.myItems.filter((x) => x.status === k).length;
+            return (
+              <Pressable
+                key={k}
+                onPress={() => {
+                  tap();
+                  setSeg(k);
+                }}
+                style={[st.segBtn, seg === k && st.segBtnOn]}
+              >
+                <Text style={[st.segTxt, seg === k && { color: INK }]}>
+                  {l}
+                  {c ? ` ${c}` : ''}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {list.length === 0 ? (
+          <View style={{ alignItems: 'center', marginTop: 40 }}>
+            <Text style={{ fontSize: 48 }}>{seg === 'given' ? '🤝' : '📦'}</Text>
+            <Text style={[st.h2, { marginTop: 10 }]}>{seg === 'active' ? 'Nic tu zatím není' : seg === 'reserved' ? 'Žádné rezervace' : 'Zatím nic předaného'}</Text>
+            {seg === 'active' ? <Button title="＋ Darovat věc" style={{ marginTop: 16, paddingHorizontal: 30 }} onPress={ctx.openAdd} /> : null}
+          </View>
+        ) : null}
+        {list.map((it, i) => {
+          const req = ctx.incoming.filter((r) => r.item_id === it.id);
+          const pend = req.filter((r) => r.status === 'pending').length;
+          return (
+            <FadeIn key={it.id} delay={i * 60}>
+              <Pressable
+                onPress={() => {
+                  tap();
+                  setOpen(it.id);
+                }}
+                style={[st.itemCard, { flexDirection: 'row', alignItems: 'center', marginBottom: 12 }]}
+              >
+                <Thumb item={it} emojiSize={34} style={{ width: 80, height: 80 }} />
+                <View style={{ padding: 12, flex: 1 }}>
+                  <Text style={st.itemTitle}>{it.t}</Text>
+                  <Text style={st.itemMeta}>
+                    {it.status === 'given' ? '✅ Předáno' : it.status === 'reserved' ? '🤝 Rezervováno' : `👀 ${it.views} zobrazení • 🙋 ${req.length}`}
+                  </Text>
+                  {pend ? <Text style={[st.itemMeta, { color: B, fontWeight: '800' }]}>Čeká na tebe {pend} {pend === 1 ? 'žádost' : 'žádosti'}</Text> : null}
+                </View>
+                <Text style={{ fontSize: 22, color: '#C7C7CC', marginRight: 12 }}>›</Text>
+              </Pressable>
+            </FadeIn>
+          );
+        })}
+      </ScrollView>
+      <ItemDetail item={current} onClose={() => setOpen(null)} ctx={ctx} />
+    </View>
+  );
+}
+
+function LoginPrompt({ ctx, text }) {
+  return (
+    <View style={{ alignItems: 'center', paddingHorizontal: 32, marginTop: 60 }}>
+      <AppIcon size={80} />
+      <Text style={[st.h2, { marginTop: 18, textAlign: 'center' }]}>Ještě nejsi přihlášený</Text>
+      <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 6 }]}>{text}</Text>
+      <Button title="Přihlásit se" style={{ marginTop: 18, alignSelf: 'stretch' }} onPress={() => ctx.requireLogin(() => {})} />
+    </View>
+  );
+}
+
+// ---------- Aktivita ----------
+function ActivityTab({ ctx }) {
+  const [open, setOpen] = useState(null);
+  if (!ctx.myId) {
+    return (
+      <View style={{ flex: 1 }}>
+        <Header title="Aktivita" />
+        <LoginPrompt ctx={ctx} text="Tady uvidíš, kdo chce tvoje věci, a jak dopadly tvoje žádosti." />
+      </View>
+    );
+  }
+  return (
+    <View style={{ flex: 1 }}>
+      <Header title="Aktivita" />
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}
+        refreshControl={<RefreshControl refreshing={ctx.refreshing} onRefresh={ctx.refresh} tintColor={B} />}
+      >
+        <Text style={st.section}>Žádosti o tvoje věci</Text>
+        {ctx.incoming.length === 0 ? <Text style={st.chartAxis}>Zatím nikdo. Jakmile se někdo přihlásí, přijde ti upozornění.</Text> : null}
+        {ctx.incoming.map((r, i) => (
+          <FadeIn key={r.id} delay={i * 60} style={[st.reqCard, r.status === 'declined' && { opacity: 0.5 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={st.avatar}>
+                <Text style={{ fontSize: 20, fontWeight: '900', color: B }}>{((r.requester && r.requester.name) || '?').trim()[0].toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={st.h2}>{(r.requester && r.requester.name) || 'Soused'}</Text>
+                <Text style={st.chartAxis}>chce „{r.item && r.item.title}“ • {ago(r.created_at)}</Text>
+              </View>
+            </View>
+            {r.message ? <Text style={[st.body, { marginTop: 10 }]}>„{r.message}“</Text> : null}
+            {r.status === 'pending' ? (
+              <View style={{ flexDirection: 'row', marginTop: 12 }}>
+                <Button title="Potvrdit" style={{ flex: 1, height: 48, marginRight: 8, marginBottom: 0 }} onPress={() => ctx.accept(r.id)} />
+                <Button title="Odmítnout" light style={{ flex: 1, height: 48, marginBottom: 0 }} onPress={() => ctx.decline(r.id)} />
+              </View>
+            ) : (
+              <Text style={[st.chartAxis, { marginTop: 10, fontWeight: '700', color: r.status === 'accepted' ? GREEN : SUB }]}>
+                {r.status === 'accepted' ? '✅ Potvrzeno – zájemce vidí tvůj kontakt' : 'Odmítnuto'}
+              </Text>
+            )}
+          </FadeIn>
+        ))}
+        <Text style={[st.section, { marginTop: 28 }]}>Tvoje žádosti</Text>
+        {ctx.outgoingList.length === 0 ? <Text style={st.chartAxis}>O nic sis zatím neřekl. Klepni na věc a dej „Mám zájem“.</Text> : null}
+        {ctx.outgoingList.map((r) =>
+          r.item ? (
+            <Pressable key={r.id} onPress={() => setOpen(mapItem(r.item, ctx.myId))} style={[st.reqCard, { flexDirection: 'row', alignItems: 'center' }]}>
+              <Thumb item={mapItem(r.item, ctx.myId)} emojiSize={24} style={[st.avatar, { borderRadius: 14 }]} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={st.h2}>{r.item.title}</Text>
+                <Text style={[st.chartAxis, r.status === 'accepted' && { color: GREEN, fontWeight: '700' }]}>
+                  {r.status === 'accepted' ? '✅ Dárce potvrdil – klepni pro kontakt' : r.status === 'pending' ? '⏳ Čeká na potvrzení dárce' : 'Dárce vybral někoho jiného'}
+                </Text>
+              </View>
+            </Pressable>
+          ) : null
+        )}
+      </ScrollView>
+      <ItemDetail item={open} onClose={() => setOpen(null)} ctx={ctx} />
+    </View>
+  );
+}
+
+// ---------- Profil ----------
+function ProfileTab({ ctx, onRestart }) {
+  const p = ctx.profile;
+  const [name, setName] = useState((p && p.name) || '');
+  useEffect(() => setName((p && p.name) || ''), [p && p.name]);
+  if (!ctx.myId) {
+    return (
+      <View style={{ flex: 1 }}>
+        <Header title="Profil" />
+        <LoginPrompt ctx={ctx} text="Přihlášení zabere jedno klepnutí přes Apple." />
+        <View style={{ paddingHorizontal: 24, marginTop: 30 }}>
+          <SettingsLinks />
+        </View>
+      </View>
+    );
+  }
+  const given = ctx.myItems.length;
+  const handed = ctx.myItems.filter((x) => x.status === 'given').length;
+  const got = Object.values(ctx.outgoing).filter((x) => x === 'accepted').length;
+  const c = ctx.contact;
+  return (
+    <View style={{ flex: 1 }}>
+      <Header title="Profil" />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 30 }}>
+        <View style={{ alignItems: 'center' }}>
+          <View style={st.bigAvatar}>
+            <Text style={{ color: '#fff', fontSize: 40, fontWeight: '900' }}>{(name.trim()[0] || '🙂').toUpperCase()}</Text>
+          </View>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            onEndEditing={() => ctx.updateName(name.trim())}
+            placeholder="Tvoje jméno"
+            placeholderTextColor="#B5B5BA"
+            maxLength={40}
+            style={[st.h1, { fontSize: 26, textAlign: 'center', marginTop: 12, minWidth: 200 }]}
+          />
+          <Text style={[st.chartAxis, { marginTop: 4 }]}>Jméno uvidí sousedé u tvých věcí</Text>
+          <View style={[st.pointsPill, { marginTop: 10 }]}>
+            <Text style={{ fontWeight: '900', color: B }}>⭐ {(p && p.points) || 0} bodů dobra</Text>
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', marginTop: 20 }}>
+          {[
+            [given, 'darováno'],
+            [handed, 'předáno'],
+            [got, 'získáno'],
+          ].map(([v, l]) => (
+            <View key={l} style={st.statBox}>
+              <Text style={[st.bigNum, { fontSize: 26 }]}>{v}</Text>
+              <Text style={st.chartAxis}>{l}</Text>
+            </View>
+          ))}
+        </View>
+
+        <Text style={st.section}>Odznaky</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          {[
+            ['🌱', 'Nováček', !!(p && p.welcome_claimed)],
+            ['🎁', 'První dar', given >= 1],
+            ['🤝', 'Dobrý soused', handed >= 1],
+            ['🔎', 'Lovec pokladů', got >= 1],
+          ].map(([e, l, on]) => (
+            <View key={l} style={[st.badgeBox, !on && { opacity: 0.35 }]}>
+              <Text style={{ fontSize: 30 }}>{on ? e : '🔒'}</Text>
+              <Text style={[st.chartAxis, { color: on ? INK : SUB, fontWeight: '700', textAlign: 'center' }]}>{l}</Text>
+            </View>
+          ))}
+        </View>
+
+        <Text style={st.section}>Kontakt pro zájemce</Text>
+        <View style={st.chartCard}>
+          {c && c.methods && c.methods.length ? (
+            <>
+              <Text style={{ fontSize: 22 }}>{CONTACTS.filter((x) => c.methods.includes(x.id)).map((x) => x.e).join('  ')}</Text>
+              {c.phone ? <Text style={st.chartAxis}>📱 {c.phone}</Text> : null}
+              {c.messenger ? <Text style={st.chartAxis} numberOfLines={1}>⚡ {c.messenger}</Text> : null}
+              <Text style={[st.chartAxis, { marginTop: 6 }]}>Vidí ho jen zájemce, kterého potvrdíš. Předvyplní se u další věci.</Text>
+            </>
+          ) : (
+            <Text style={st.chartAxis}>Uloží se, až přidáš první věc.</Text>
+          )}
+        </View>
+
+        <Text style={st.section}>Nastavení a pomoc</Text>
+        <SettingsLinks />
+        <View style={[st.chartCard, { paddingVertical: 4, marginTop: 12 }]}>
+          <Pressable
+            style={st.settingRow}
+            onPress={() =>
+              Alert.alert('Odhlásit se?', null, [
+                { text: 'Zrušit', style: 'cancel' },
+                { text: 'Odhlásit', onPress: ctx.signOut },
+              ])
+            }
+          >
+            <Text style={[st.body, { flex: 1 }]}>Odhlásit se</Text>
+          </Pressable>
+          <Pressable
+            style={[st.settingRow, { borderTopWidth: 1, borderTopColor: '#E8E8ED' }]}
+            onPress={() =>
+              Alert.alert('Smazat účet?', 'Smažeme tvůj profil, inzeráty, žádosti i kontakty. Tohle nejde vrátit.', [
+                { text: 'Zrušit', style: 'cancel' },
+                { text: 'Smazat účet', style: 'destructive', onPress: ctx.deleteAccount },
+              ])
+            }
+          >
+            <Text style={[st.body, { flex: 1, color: '#FF3B30' }]}>Smazat účet</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function SettingsLinks() {
+  const rows = [
+    ['📄', 'Podmínky použití', () => Linking.openURL(TERMS_URL)],
+    ['🔒', 'Ochrana soukromí', () => Linking.openURL(PRIVACY_URL)],
+    ['✉️', 'Napsat podpoře', () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=TAKE.it`).catch(() => Alert.alert('Podpora', SUPPORT_EMAIL))],
+  ];
+  return (
+    <View style={[st.chartCard, { paddingVertical: 4 }]}>
+      {rows.map(([e, l, fn], i) => (
+        <Pressable key={l} onPress={fn} style={[st.settingRow, i > 0 && { borderTopWidth: 1, borderTopColor: '#E8E8ED' }]}>
+          <Text style={{ fontSize: 18 }}>{e}</Text>
+          <Text style={[st.body, { flex: 1, marginLeft: 12 }]}>{l}</Text>
+          <Text style={{ fontSize: 20, color: '#C7C7CC' }}>›</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+// ---------- Root ----------
+const GIVE_STEPS = [GiveReason, GiveImpact, GiveWhat, GiveAmount, GivePickup, NeighborsMap, GiveSpeed, NotifyGive, SetupGive, GiftStep, FirstItem];
+const TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, NotifyTake, SetupTake, GiftStep, TakeDone];
+
 function Root() {
-  const [route, setRoute] = useState('welcome');
-  const [points, setPoints] = useState(0);
+  const [route, setRoute] = useState('loading');
   const [tab, setTab] = useState('home');
   const [data, setData] = useState({});
-  const [myItems, setMyItems] = useState([]);
-  const [requests, setRequests] = useState([]);
-  const [outReq, setOutReq] = useState({});
+  const [points, setPoints] = useState(0);
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [contact, setContact] = useState(null);
+  const [loc, setLoc] = useState(null);
+  const [feedRows, setFeedRows] = useState([]);
+  const [myRows, setMyRows] = useState([]);
+  const [incoming, setIncoming] = useState([]);
+  const [outgoingList, setOutgoingList] = useState([]);
+  const [loadingFeed, setLoadingFeed] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [login, setLogin] = useState(null); // { then }
   const [toast, setToast] = useState(null);
-  const timers = useRef([]);
-  const later = (fn, ms) => timers.current.push(setTimeout(fn, ms));
+  const myId = session ? session.user.id : null;
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
-  const notify = async (title, body, payload) => {
-    let shown = false;
-    try {
-      const { status } = await Notifications.getPermissionsAsync();
-      if (status === 'granted') {
-        await Notifications.scheduleNotificationAsync({ content: { title, body, data: payload, sound: true }, trigger: null });
-        shown = true;
+  // Start: přihlášení + jestli už prošel onboardingem
+  useEffect(() => {
+    (async () => {
+      const done = await AsyncStorage.getItem('onboarded').catch(() => null);
+      const { data: s } = await supabase.auth.getSession();
+      setSession(s.session);
+      setRoute(done ? 'main' : 'welcome');
+    })();
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Poloha (přibližná) pro feed a nové věci
+  useEffect(() => {
+    if (route !== 'main' && route !== 'give' && route !== 'take') return;
+    if (loc) return;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return setLoc(CENTER);
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setLoc({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+      } catch (e) {
+        setLoc(CENTER);
       }
-    } catch (e) {}
-    if (!shown) setToast({ title, body, data: payload });
-  };
+    })();
+  }, [route]);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const l = loc || CENTER;
+      const jobs = [api.fetchFeed(l.latitude, l.longitude, 30).then(setFeedRows)];
+      if (myId) {
+        jobs.push(api.getProfile(myId).then(setProfile));
+        jobs.push(api.getMyContact(myId).then(setContact));
+        jobs.push(api.fetchMyItems(myId).then(setMyRows));
+        jobs.push(api.fetchIncoming(myId).then(setIncoming));
+        jobs.push(api.fetchOutgoing(myId).then(setOutgoingList));
+      } else {
+        setProfile(null);
+        setContact(null);
+        setMyRows([]);
+        setIncoming([]);
+        setOutgoingList([]);
+      }
+      await Promise.all(jobs);
+    } catch (e) {
+      if (!isConfigured) setToast({ title: 'Chybí napojení na server', body: 'Doplň Supabase klíče podle README.' });
+      else setToast({ title: 'Nepodařilo se načíst data', body: 'Zkontroluj připojení k internetu a zkus to znovu.' });
+    } finally {
+      setRefreshing(false);
+      setLoadingFeed(false);
+    }
+  }, [loc, myId]);
 
   useEffect(() => {
-    let sub;
+    if (route === 'main' || route === 'given') refresh();
+  }, [route, myId, loc]);
+
+  // Notifikace: klepnutí → Aktivita, příchozí → obnovit data
+  useEffect(() => {
+    let a;
+    let b;
     try {
-      sub = Notifications.addNotificationResponseReceivedListener((r) => {
-        const t = r.notification.request.content.data && r.notification.request.content.data.type;
-        if (t === 'request') {
-          setRoute('main');
-          setTab('activity');
-        }
+      a = Notifications.addNotificationResponseReceivedListener(() => {
+        setRoute('main');
+        setTab('activity');
       });
+      b = Notifications.addNotificationReceivedListener(() => refresh());
     } catch (e) {}
-    return () => sub && sub.remove();
-  }, []);
+    return () => {
+      a && a.remove();
+      b && b.remove();
+    };
+  }, [refresh]);
+
+  const afterLogin = async (s) => {
+    setSession(s);
+    const uid = s.user.id;
+    api.registerPush(uid);
+    if (dataRef.current.welcomeGift) await api.claimWelcome().catch(() => {});
+    const [prof, cont] = await Promise.all([api.getProfile(uid), api.getMyContact(uid)]);
+    setProfile(prof);
+    setContact(cont);
+    return uid;
+  };
+
+  const run = async (fn, okToast) => {
+    try {
+      await fn();
+      if (okToast) setToast(okToast);
+      await refresh();
+    } catch (e) {
+      Alert.alert('Něco se nepovedlo', String((e && e.message) || e));
+    }
+  };
+
+  const outgoing = {};
+  outgoingList.forEach((r) => {
+    if (r.item) outgoing[r.item.id] = r.status;
+  });
 
   const ctx = {
     data,
     set: (k, v) => setData((d) => ({ ...d, [k]: v })),
     points,
-    addPoints: (n) => setPoints((p) => p + n),
-    myItems,
-    requests,
-    outReq,
+    addPoints: (n) => setPoints((x) => x + n),
+    myId,
+    profile,
+    contact,
+    loc,
+    feed: feedRows.map((r) => mapItem(r, myId)),
+    myItems: myRows.map((r) => mapItem(r, myId)),
+    incoming,
+    outgoing,
+    outgoingList,
+    loadingFeed,
+    refreshing,
+    refresh,
     tab,
     setTab,
     addOpen,
-    openAdd: () => setAddOpen(true),
+    openAdd: () => (myId ? setAddOpen(true) : setLogin({ then: () => setAddOpen(true) })),
     closeAdd: () => setAddOpen(false),
     openInbox: () => {
       setRoute('main');
       setTab('activity');
     },
-    addItem: (it) => {
-      const id = 'my' + Date.now();
-      setMyItems((xs) => [...xs, { ...it, id, status: 'active', views: 0, at: Date.now() }]);
-      setPoints((p) => p + 50);
-      later(() => setMyItems((xs) => xs.map((x) => (x.id === id ? { ...x, views: x.views + 7 } : x))), 3000);
-      NEIGHBORS.forEach((n) =>
-        later(() => {
-          setRequests((rs) => [...rs, { ...n, id: n.from + Date.now(), itemId: id, itemT: it.t, status: 'pending', at: Date.now() }]);
-          success();
-          notify(`${n.from} chce „${it.t}“ 👋`, n.msg, { type: 'request' });
-        }, n.delay)
-      );
+    requireLogin: (fn) => {
+      if (myId) return fn(myId);
+      setLogin({ then: fn });
     },
-    accept: (rid) => {
-      const r = requests.find((x) => x.id === rid);
-      if (!r) return;
-      setRequests((rs) =>
-        rs.map((x) => (x.id === rid ? { ...x, status: 'accepted' } : x.itemId === r.itemId && x.status === 'pending' ? { ...x, status: 'declined' } : x))
-      );
-      setMyItems((xs) => xs.map((x) => (x.id === r.itemId ? { ...x, status: 'reserved' } : x)));
-      success();
-      setToast({ title: 'Potvrzeno 🎉', body: `${r.from} dostal upozornění a tvůj kontakt. Po předání označ věc jako předanou.` });
-    },
-    unlock: (pl) => {
-      setData((d) => ({ ...d, unlocked: true, plan: pl || 'year', planAt: Date.now() }));
-      success();
-      setTimeout(() => setToast({ title: 'Vítej v TAKE.IT Plus 💜', body: 'Seznam je odemčený. Klepni na věc a dej „Mám zájem“.' }), 600);
-    },
-    decline: (rid) => setRequests((rs) => rs.map((x) => (x.id === rid ? { ...x, status: 'declined' } : x))),
-    markGiven: (id) => {
-      setMyItems((xs) => xs.map((x) => (x.id === id ? { ...x, status: 'given' } : x)));
-      setPoints((p) => p + 100);
-      success();
-      setToast({ title: 'Předáno ✅ +100 ⭐', body: 'Díky, že posíláš věci dál! Odemkl sis odznak Dobrý soused 🤝' });
-    },
-    deleteItem: (id) => {
-      setMyItems((xs) => xs.filter((x) => x.id !== id));
-      setRequests((rs) => rs.filter((r) => r.itemId !== id));
-    },
-    requestItem: (item, msg) => {
-      setOutReq((o) => ({ ...o, [item.t]: 'pending' }));
-      success();
-      later(() => {
-        setOutReq((o) => ({ ...o, [item.t]: 'accepted' }));
-        success();
-        notify(`${item.t} je tvoje! 🎉`, 'Dárce potvrdil tvoji žádost – kontakt je odemčený. Domluvte si vyzvednutí.', { type: 'accepted' });
-      }, 6000);
-    },
+    requestItem: (item, msg, uid) =>
+      run(() => api.requestItem(uid || myId, item.id, msg), { title: 'Žádost odeslána 🙋', body: 'Dáme ti vědět, jakmile dárce odpoví.' }),
+    accept: (id) => run(() => api.acceptRequest(id), { title: 'Potvrzeno 🎉', body: 'Zájemce dostal upozornění a tvůj kontakt. Po předání věc označ jako předanou.' }),
+    decline: (id) => run(() => api.declineRequest(id)),
+    markGiven: (id) => run(() => api.markGiven(id), { title: 'Předáno ✅ +100 ⭐', body: 'Díky, že posíláš věci dál! 💜' }),
+    deleteItem: (id) => run(() => api.deleteItem(id)),
+    report: (item, reason) =>
+      ctx.requireLogin((uid) => run(() => api.reportItem(uid, item.id, reason), { title: 'Díky za nahlášení', body: 'Podíváme se na to. Po více nahlášeních se inzerát skryje automaticky.' })),
+    block: (otherId) =>
+      ctx.requireLogin((uid) => run(() => api.blockUser(uid, otherId), { title: 'Uživatel zablokován', body: 'Jeho věci už neuvidíš a on neuvidí tvoje.' })),
+    updateName: (name) => myId && run(() => api.updateName(myId, name)),
+    signOut: () => run(() => api.signOut()),
+    deleteAccount: () => run(() => api.deleteAccount(), { title: 'Účet smazán', body: 'Mrzí nás, že odcházíš. Kdykoli se můžeš vrátit.' }),
   };
 
-  const restart = () => {
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
-    setData({});
-    setPoints(0);
-    setMyItems([]);
-    setRequests([]);
-    setOutReq({});
-    setAddOpen(false);
-    setTab('home');
-    setRoute('welcome');
+  const finishOnboarding = async (dest, t) => {
+    await AsyncStorage.setItem('onboarded', '1').catch(() => {});
+    setTab(t || 'home');
+    setRoute(dest);
   };
 
   let screen;
-  if (route === 'welcome') screen = <Welcome onStart={() => setRoute('intro')} />;
+  if (route === 'loading')
+    screen = (
+      <View style={{ flex: 1, backgroundColor: B, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#fff" />
+      </View>
+    );
+  else if (route === 'welcome') screen = <Welcome onStart={() => setRoute('intro')} />;
   else if (route === 'intro') screen = <Intro onPick={setRoute} />;
   else if (route === 'give')
-    screen = <Flow key="give" steps={GIVE_STEPS} ctx={ctx} onExit={() => setRoute('intro')} onFinish={() => setRoute('given')} />;
-  else if (route === 'given')
-    screen = (
-      <Given
-        ctx={ctx}
-        onContinue={() => {
-          setTab(myItems.length ? 'mine' : 'home');
-          setRoute('main');
-        }}
-        onRestart={restart}
-      />
-    );
-  else if (route === 'take')
-    screen = (
-      <Flow
-        key="take"
-        steps={TAKE_STEPS}
-        ctx={ctx}
-        onExit={() => setRoute('intro')}
-        onFinish={() => {
-          setTab('home');
-          setRoute('main');
-        }}
-      />
-    );
-  else screen = <MainApp ctx={ctx} onRestart={restart} />;
+    screen = <Flow key="give" steps={GIVE_STEPS} ctx={ctx} onExit={() => setRoute('intro')} onFinish={() => finishOnboarding('given', 'mine')} />;
+  else if (route === 'given') screen = <Given ctx={ctx} onContinue={() => finishOnboarding('main', 'mine')} />;
+  else if (route === 'take') screen = <Flow key="take" steps={TAKE_STEPS} ctx={ctx} onExit={() => setRoute('intro')} onFinish={() => finishOnboarding('main', 'home')} />;
+  else screen = <MainApp ctx={ctx} />;
 
   return (
     <View style={{ flex: 1 }}>
       <StatusBar barStyle="dark-content" />
       {screen}
       <AddItemModal ctx={ctx} />
-      <Toast
-        toast={toast}
-        onHide={() => setToast(null)}
-        onPress={() => {
-          if (toast && toast.data && toast.data.type === 'request') ctx.openInbox();
-          setToast(null);
+      <LoginSheet
+        visible={!!login}
+        onClose={() => setLogin(null)}
+        onSuccess={async (s) => {
+          const pending = login;
+          setLogin(null);
+          const uid = await afterLogin(s);
+          if (pending && pending.then) setTimeout(() => pending.then(uid), 400);
         }}
       />
+      <Toast toast={toast} onHide={() => setToast(null)} onPress={() => setToast(null)} />
     </View>
   );
 }
@@ -3327,6 +3073,7 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
 
 // ---------- Styly ----------
 const st = StyleSheet.create({
@@ -3607,3 +3354,4 @@ const st = StyleSheet.create({
     elevation: 8,
   },
 });
+

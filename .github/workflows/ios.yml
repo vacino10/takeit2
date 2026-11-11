@@ -1,0 +1,48 @@
+# Sestaví iOS appku v cloudu (EAS) a pošle ji do TestFlightu.
+# Spuštění: GitHub → Actions → "iOS build + TestFlight" → Run workflow.
+name: iOS build + TestFlight
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Propojit s Expo projektem
+        run: eas init --non-interactive --force
+
+      - name: App Store Connect klíč a nastavení odeslání
+        run: |
+          printf '%s' "${{ secrets.ASC_API_KEY_P8 }}" > /tmp/asc.p8
+          jq --arg app "${{ secrets.ASC_APP_ID }}" --arg kid "${{ secrets.ASC_KEY_ID }}" --arg iss "${{ secrets.ASC_ISSUER_ID }}" \
+            '.submit.production.ios.ascAppId=$app | .submit.production.ios.ascApiKeyId=$kid | .submit.production.ios.ascApiKeyIssuerId=$iss' \
+            eas.json > eas.tmp && mv eas.tmp eas.json
+
+      - name: Proměnné pro build (Supabase)
+        run: |
+          eas env:create --name EXPO_PUBLIC_SUPABASE_URL --value "${{ secrets.SUPABASE_URL }}" --environment production --visibility plaintext --force --non-interactive
+          eas env:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "${{ secrets.SUPABASE_ANON_KEY }}" --environment production --visibility plaintext --force --non-interactive
+
+      - name: Build + TestFlight
+        env:
+          EXPO_ASC_API_KEY_PATH: /tmp/asc.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          EXPO_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          EXPO_APPLE_TEAM_TYPE: ${{ secrets.APPLE_TEAM_TYPE || 'INDIVIDUAL' }}
+        run: eas build --platform ios --profile production --non-interactive --auto-submit

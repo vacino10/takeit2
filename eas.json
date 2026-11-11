@@ -1,0 +1,19 @@
+{
+  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
+  "build": {
+    "production": {
+      "environment": "production",
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "VYPLNI_WORKFLOW",
+        "ascApiKeyPath": "/tmp/asc.p8",
+        "ascApiKeyId": "VYPLNI_WORKFLOW",
+        "ascApiKeyIssuerId": "VYPLNI_WORKFLOW"
+      }
+    }
+  }
+}
