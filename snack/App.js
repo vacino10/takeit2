@@ -18,7 +18,6 @@ var { LinearGradient } = require('expo-linear-gradient');
 var Haptics = require('expo-haptics');
 var ImagePicker = require('expo-image-picker');
 var MapViewNative = __d(require('react-native-maps')); var { Marker: MarkerNative, Circle: CircleNative } = require('react-native-maps');
-var Svg = __d(require('react-native-svg')); var { Path, Rect, Circle, Ellipse } = require('react-native-svg');
 
 var MapView = MapViewNative;
 var Marker = MarkerNative;
@@ -795,27 +794,31 @@ var Taki = function Taki({ size = 120, mood = 'happy', wave = false, jump = 0 })
     ]).start();
   }, [jump]);
   const k = size / 120;
-  const eyesClosed = blink;
-  const eye = (cx, closedForce) =>
-    eyesClosed || closedForce ? (
-      <Path d={`M${cx - 8} 73 Q${cx} 79 ${cx + 8} 73`} stroke="#FFFFFF" strokeWidth={4} fill="none" strokeLinecap="round" />
+  // Taki je složený z obyčejných tvarů (bez SVG), souřadnice v mřížce 120 × 140
+  const box = (x, y, w, h, extra) => ({ position: 'absolute', left: x * k, top: y * k, width: w * k, height: h * k, ...extra });
+  const DARK = '#5A1FBF';
+  const arc = (x, y, w, h, color, thick) => (
+    <View style={box(x, y, w, h, { borderBottomWidth: thick * k, borderLeftWidth: thick * 0.6 * k, borderRightWidth: thick * 0.6 * k, borderColor: color, borderBottomLeftRadius: w * k, borderBottomRightRadius: w * k, borderTopWidth: 0 })} />
+  );
+  const eye = (cx, closed) =>
+    closed ? (
+      arc(cx - 8, 68, 16, 8, '#FFFFFF', 4)
     ) : (
       <>
-        <Ellipse cx={cx} cy={72} rx={9} ry={mood === 'wow' ? 12 : 11} fill="#FFFFFF" />
-        <Circle cx={cx + 2} cy={mood === 'think' ? 69 : 74} r={5} fill="#16102A" />
-        <Circle cx={cx + 4} cy={mood === 'think' ? 67 : 71} r={1.8} fill="#FFFFFF" />
+        <View style={box(cx - 9, 61, 18, mood === 'wow' ? 24 : 22, { backgroundColor: '#FFFFFF', borderRadius: 11 * k })} />
+        <View style={box(cx - 3, mood === 'think' ? 64 : 69, 10, 10, { backgroundColor: '#16102A', borderRadius: 5 * k })} />
+        <View style={box(cx + 2, mood === 'think' ? 65 : 70, 4, 4, { backgroundColor: '#FFFFFF', borderRadius: 2 * k })} />
       </>
     );
-  let mouth = <Path d="M50 92 Q60 102 70 92" stroke="#FFFFFF" strokeWidth={4} fill="none" strokeLinecap="round" />;
-  if (mood === 'wow') mouth = <Ellipse cx={60} cy={97} rx={7} ry={8} fill="#2A0B66" />;
+  let mouth = arc(50, 88, 20, 10, '#FFFFFF', 4);
+  if (mood === 'wow') mouth = <View style={box(53, 89, 14, 16, { backgroundColor: '#2A0B66', borderRadius: 8 * k })} />;
   if (mood === 'excited')
     mouth = (
-      <>
-        <Path d="M47 90 Q60 110 73 90 Z" fill="#2A0B66" />
-        <Path d="M53 99 Q60 105 67 99 Q60 102 53 99 Z" fill="#FF8FB1" />
-      </>
+      <View style={box(47, 89, 26, 14, { backgroundColor: '#2A0B66', borderBottomLeftRadius: 14 * k, borderBottomRightRadius: 14 * k, overflow: 'hidden' })}>
+        <View style={{ position: 'absolute', left: 6 * k, top: 8 * k, width: 14 * k, height: 8 * k, borderRadius: 6 * k, backgroundColor: '#FF8FB1' }} />
+      </View>
     );
-  if (mood === 'think') mouth = <Path d="M52 97 Q60 93 68 96" stroke="#FFFFFF" strokeWidth={4} fill="none" strokeLinecap="round" />;
+  if (mood === 'think') mouth = <View style={box(52, 95, 16, 4, { backgroundColor: '#FFFFFF', borderRadius: 2 * k, transform: [{ rotate: '-8deg' }] })} />;
   return (
     <Animated.View
       style={{
@@ -827,20 +830,18 @@ var Taki = function Taki({ size = 120, mood = 'happy', wave = false, jump = 0 })
         ],
       }}
     >
-      <Svg width={size} height={size * (140 / 120)} viewBox="0 0 120 140">
-        <Ellipse cx={60} cy={133} rx={30} ry={5} fill="rgba(17,17,17,0.12)" />
-        <Path d="M42 38 C42 10, 78 10, 78 38" stroke="#5A1FBF" strokeWidth={9} fill="none" strokeLinecap="round" />
-        <Rect x={36} y={114} width={18} height={14} rx={7} fill="#5A1FBF" />
-        <Rect x={66} y={114} width={18} height={14} rx={7} fill="#5A1FBF" />
-        <Rect x={6} y={76} width={16} height={26} rx={8} fill="#5A1FBF" />
-        <Rect x={16} y={34} width={88} height={86} rx={28} fill="#7028E8" />
-        <Rect x={26} y={41} width={38} height={12} rx={6} fill="#FFFFFF" opacity={0.2} />
-        {eye(46, false)}
-        {eye(74, mood === 'wink')}
-        <Ellipse cx={33} cy={90} rx={7} ry={4.5} fill="#FF8FB1" opacity={0.75} />
-        <Ellipse cx={87} cy={90} rx={7} ry={4.5} fill="#FF8FB1" opacity={0.75} />
-        {mouth}
-      </Svg>
+      <View style={box(30, 128, 60, 10, { backgroundColor: 'rgba(17,17,17,0.12)', borderRadius: 30 * k })} />
+      <View style={box(38, 10, 44, 40, { borderWidth: 9 * k, borderBottomWidth: 0, borderColor: DARK, borderTopLeftRadius: 22 * k, borderTopRightRadius: 22 * k })} />
+      <View style={box(36, 114, 18, 14, { backgroundColor: DARK, borderRadius: 7 * k })} />
+      <View style={box(66, 114, 18, 14, { backgroundColor: DARK, borderRadius: 7 * k })} />
+      <View style={box(6, 76, 16, 26, { backgroundColor: DARK, borderRadius: 8 * k })} />
+      <View style={box(16, 34, 88, 86, { backgroundColor: B, borderRadius: 28 * k })} />
+      <View style={box(26, 41, 38, 12, { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 6 * k })} />
+      {eye(46, blink)}
+      {eye(74, blink || mood === 'wink')}
+      <View style={box(26, 86, 14, 9, { backgroundColor: 'rgba(255,143,177,0.75)', borderRadius: 7 * k })} />
+      <View style={box(80, 86, 14, 9, { backgroundColor: 'rgba(255,143,177,0.75)', borderRadius: 7 * k })} />
+      {mouth}
       <Animated.View
         style={{
           position: 'absolute',
@@ -849,12 +850,10 @@ var Taki = function Taki({ size = 120, mood = 'happy', wave = false, jump = 0 })
           width: 16 * k,
           height: 28 * k,
           transformOrigin: 'top',
-          transform: [
-            { rotate: wave ? arm.interpolate({ inputRange: [-1, 1], outputRange: ['-150deg', '-115deg'] }) : '-10deg' },
-          ],
+          transform: [{ rotate: wave ? arm.interpolate({ inputRange: [-1, 1], outputRange: ['-150deg', '-115deg'] }) : '-10deg' }],
         }}
       >
-        <View style={{ flex: 1, borderRadius: 8 * k, backgroundColor: '#5A1FBF' }} />
+        <View style={{ flex: 1, borderRadius: 8 * k, backgroundColor: DARK }} />
       </Animated.View>
     </Animated.View>
   );
