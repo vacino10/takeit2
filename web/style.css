@@ -47,7 +47,7 @@ a:hover { text-decoration: underline; }
 .pill { display: inline-flex; align-items: center; gap: 8px; background: var(--b-light); color: var(--b); font-weight: 700; font-size: 14px; padding: 7px 14px; border-radius: 20px; }
 .pill .dot { width: 8px; height: 8px; border-radius: 4px; background: var(--b); animation: pulse 1.6s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-h1 { font-size: clamp(40px, 6vw, 68px); line-height: 1.02; letter-spacing: -0.035em; margin: 18px 0 18px; font-weight: 800; }
+h1 { font-size: clamp(40px, 6vw, 68px); line-height: 1.02; letter-spacing: -0.035em; margin: 0 0 18px; font-weight: 800; }
 h1 em { font-style: normal; color: var(--b); }
 .lead { font-size: 19px; color: var(--sub); max-width: 520px; margin: 0 0 28px; }
 h2 { font-size: clamp(30px, 4vw, 44px); line-height: 1.08; letter-spacing: -0.03em; margin: 0 0 14px; font-weight: 800; }
@@ -175,7 +175,7 @@ footer small { color: var(--sub); }
   .hero .wrap { display: flex; flex-direction: column; gap: 0; }
   .hero .wrap > div:first-child { display: contents; }
   .hero .pill { order: 1; align-self: flex-start; }
-  .hero h1 { order: 2; margin: 14px 0 10px; font-size: 42px; text-align: left; align-self: stretch; }
+  .hero h1 { order: 2; margin: 4px 0 10px; font-size: 42px; text-align: left; align-self: stretch; }
   .hero .lead { order: 3; font-size: 17px; margin-bottom: 4px; }
   .hero .phones { order: 4; }
   .hero .wl { order: 5; }
