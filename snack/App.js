@@ -1,47 +1,27 @@
 // TAKE.it – Pošli to dál.
+var __d = function (m) { return m && m.__esModule && 'default' in m ? m.default : m; };
 // Verze pro Expo Snack (vše v jednom souboru)
-import { setupURLPolyfill } from 'react-native-url-polyfill';
-import { createClient } from '@supabase/supabase-js';
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as Device from 'expo-device';
-import Constants from 'expo-constants';
-import { decode } from 'base64-arraybuffer';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Animated,
-  Easing,
-  ScrollView,
-  TextInput,
-  Image,
-  Modal,
-  PanResponder,
-  ActivityIndicator,
-  Dimensions,
-  Platform,
-  Alert,
-  KeyboardAvoidingView,
-  StatusBar,
-  Linking,
-  Share,
-  RefreshControl,
-} from 'react-native';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications';
-import * as Location from 'expo-location';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
-import MapViewNative, { Marker as MarkerNative, Circle as CircleNative } from 'react-native-maps';
+var { setupURLPolyfill } = require('react-native-url-polyfill');
+var { createClient } = require('@supabase/supabase-js');
+var ImageManipulator = require('expo-image-manipulator');
+var Device = require('expo-device');
+var Constants = __d(require('expo-constants'));
+var { decode } = require('base64-arraybuffer');
+var React = __d(require('react')); var { useCallback, useEffect, useRef, useState } = require('react');
+var { View, Text, StyleSheet, Pressable, Animated, Easing, ScrollView, TextInput, Image, Modal, PanResponder, ActivityIndicator, Dimensions, Platform, Alert, KeyboardAvoidingView, StatusBar, Linking, Share, RefreshControl } = require('react-native');
+var { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } = require('react-native-safe-area-context');
+var AsyncStorage = __d(require('@react-native-async-storage/async-storage'));
+var Notifications = require('expo-notifications');
+var Location = require('expo-location');
+var AppleAuthentication = require('expo-apple-authentication');
+var { LinearGradient } = require('expo-linear-gradient');
+var Haptics = require('expo-haptics');
+var ImagePicker = require('expo-image-picker');
+var MapViewNative = __d(require('react-native-maps')); var { Marker: MarkerNative, Circle: CircleNative } = require('react-native-maps');
 
-const MapView = MapViewNative;
-const Marker = MarkerNative;
-const MapCircle = CircleNative;
+var MapView = MapViewNative;
+var Marker = MarkerNative;
+var MapCircle = CircleNative;
 
 // Notifikace se ukazují i když je appka otevřená
 try {
@@ -58,25 +38,25 @@ try {
 
 
 setupURLPolyfill();
-const SUPABASE_URL = 'https://zkhezjbvmefyqfcuytjz.supabase.co';
-const DEFAULT_KEY = 'sb_publishable_n2Xnv9QOjMrtOhtXwhfhCg_y_jUvyX9';
-let supabase = null;
-const initSupabase = (key) => {
+var SUPABASE_URL = 'https://zkhezjbvmefyqfcuytjz.supabase.co';
+var DEFAULT_KEY = 'sb_publishable_n2Xnv9QOjMrtOhtXwhfhCg_y_jUvyX9';
+var supabase = null;
+var initSupabase = (key) => {
   supabase = createClient(SUPABASE_URL, key, {
     auth: { storage: AsyncStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
   });
 };
-const isConfigured = true;
+var isConfigured = true;
 
 // Doplň před odesláním do App Store
-const SUPPORT_EMAIL = 'podpora@takeit.cz';
-const TERMS_URL = 'https://takeit.cz/podminky';
-const PRIVACY_URL = 'https://takeit.cz/soukromi';
+var SUPPORT_EMAIL = 'podpora@takeit.cz';
+var TERMS_URL = 'https://takeit.cz/podminky';
+var PRIVACY_URL = 'https://takeit.cz/soukromi';
 
 
 // ---------- Přihlášení (Apple, zdarma) ----------
 
-async function appleAvailable() {
+var appleAvailable = async function appleAvailable() {
   if (Platform.OS !== 'ios') return false;
   try {
     return await AppleAuthentication.isAvailableAsync();
@@ -85,7 +65,7 @@ async function appleAvailable() {
   }
 }
 
-async function signInWithApple() {
+var signInWithApple = async function signInWithApple() {
   const cred = await AppleAuthentication.signInAsync({
     requestedScopes: [AppleAuthentication.AppleAuthenticationScope.FULL_NAME],
   });
@@ -98,11 +78,11 @@ async function signInWithApple() {
   return data.session;
 }
 
-async function signOut() {
+var signOut = async function signOut() {
   await supabase.auth.signOut();
 }
 
-async function deleteAccount() {
+var deleteAccount = async function deleteAccount() {
   const { error } = await supabase.rpc('delete_account');
   if (error) throw error;
   await supabase.auth.signOut();
@@ -110,26 +90,26 @@ async function deleteAccount() {
 
 // ---------- Profil a kontakt ----------
 
-async function getProfile(uid) {
+var getProfile = async function getProfile(uid) {
   const { data } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
   return data;
 }
 
-async function updateName(uid, name) {
+var updateName = async function updateName(uid, name) {
   const { error } = await supabase.from('profiles').update({ name }).eq('id', uid);
   if (error) throw error;
 }
 
-async function claimWelcome() {
+var claimWelcome = async function claimWelcome() {
   await supabase.rpc('claim_welcome');
 }
 
-async function getMyContact(uid) {
+var getMyContact = async function getMyContact(uid) {
   const { data } = await supabase.from('contacts').select('*').eq('user_id', uid).maybeSingle();
   return data;
 }
 
-async function saveContact(uid, contact) {
+var saveContact = async function saveContact(uid, contact) {
   const { error } = await supabase
     .from('contacts')
     .upsert({ user_id: uid, methods: contact.methods, phone: contact.phone, messenger: contact.messenger, updated_at: new Date().toISOString() });
@@ -138,13 +118,13 @@ async function saveContact(uid, contact) {
 
 // ---------- Věci ----------
 
-async function fetchFeed(lat, lng, km = 20) {
+var fetchFeed = async function fetchFeed(lat, lng, km = 20) {
   const { data, error } = await supabase.rpc('nearby_items', { p_lat: lat, p_lng: lng, p_km: km });
   if (error) throw error;
   return data || [];
 }
 
-async function fetchMyItems(uid) {
+var fetchMyItems = async function fetchMyItems(uid) {
   const { data, error } = await supabase
     .from('items')
     .select('*, requests(id, status)')
@@ -155,7 +135,7 @@ async function fetchMyItems(uid) {
   return data || [];
 }
 
-async function uploadPhoto(uid, uri) {
+var uploadPhoto = async function uploadPhoto(uid, uri) {
   const small = await ImageManipulator.manipulateAsync(uri, [{ resize: { width: 1200 } }], {
     compress: 0.7,
     format: ImageManipulator.SaveFormat.JPEG,
@@ -167,7 +147,7 @@ async function uploadPhoto(uid, uri) {
   return supabase.storage.from('photos').getPublicUrl(path).data.publicUrl;
 }
 
-async function createItem(uid, item) {
+var createItem = async function createItem(uid, item) {
   const photos = [];
   for (const uri of item.photos || []) photos.push(await uploadPhoto(uid, uri));
   const { data, error } = await supabase
@@ -188,28 +168,28 @@ async function createItem(uid, item) {
   return data;
 }
 
-async function deleteItem(id) {
+var deleteItem = async function deleteItem(id) {
   const { error } = await supabase.from('items').delete().eq('id', id);
   if (error) throw error;
 }
 
-async function markGiven(id) {
+var markGiven = async function markGiven(id) {
   const { error } = await supabase.rpc('mark_given', { p_item: id });
   if (error) throw error;
 }
 
-async function incrementView(id) {
+var incrementView = async function incrementView(id) {
   await supabase.rpc('increment_view', { p_item: id });
 }
 
 // ---------- Žádosti ----------
 
-async function requestItem(uid, itemId, message) {
+var requestItem = async function requestItem(uid, itemId, message) {
   const { error } = await supabase.from('requests').insert({ item_id: itemId, requester_id: uid, message });
   if (error) throw error;
 }
 
-async function fetchOutgoing(uid) {
+var fetchOutgoing = async function fetchOutgoing(uid) {
   const { data, error } = await supabase
     .from('requests')
     .select('id, status, created_at, item:items(id, title, photos, status, owner_id, lat, lng, description, pickup, category, created_at, owner:profiles(name))')
@@ -219,7 +199,7 @@ async function fetchOutgoing(uid) {
   return data || [];
 }
 
-async function fetchIncoming(uid) {
+var fetchIncoming = async function fetchIncoming(uid) {
   const { data, error } = await supabase
     .from('requests')
     .select('id, status, message, created_at, item_id, requester:profiles(id, name), item:items!inner(id, title, owner_id, photos)')
@@ -229,17 +209,17 @@ async function fetchIncoming(uid) {
   return data || [];
 }
 
-async function acceptRequest(id) {
+var acceptRequest = async function acceptRequest(id) {
   const { error } = await supabase.rpc('accept_request', { p_request: id });
   if (error) throw error;
 }
 
-async function declineRequest(id) {
+var declineRequest = async function declineRequest(id) {
   const { error } = await supabase.rpc('decline_request', { p_request: id });
   if (error) throw error;
 }
 
-async function getContact(itemId) {
+var getContact = async function getContact(itemId) {
   const { data, error } = await supabase.rpc('get_contact', { p_item: itemId });
   if (error) throw error;
   return (data && data[0]) || null;
@@ -247,19 +227,19 @@ async function getContact(itemId) {
 
 // ---------- Bezpečnost ----------
 
-async function reportItem(uid, itemId, reason) {
+var reportItem = async function reportItem(uid, itemId, reason) {
   const { error } = await supabase.from('reports').insert({ item_id: itemId, reporter_id: uid, reason });
   if (error && error.code !== '23505') throw error; // už nahlášeno
 }
 
-async function blockUser(uid, otherId) {
+var blockUser = async function blockUser(uid, otherId) {
   const { error } = await supabase.from('blocks').insert({ blocker_id: uid, blocked_id: otherId });
   if (error && error.code !== '23505') throw error;
 }
 
 // ---------- Push notifikace ----------
 
-async function registerPush(uid) {
+var registerPush = async function registerPush(uid) {
   try {
     if (!Device.isDevice) return;
     let { status } = await Notifications.getPermissionsAsync();
@@ -273,7 +253,7 @@ async function registerPush(uid) {
   }
 }
 
-async function fetchNotifications(uid) {
+var fetchNotifications = async function fetchNotifications(uid) {
   const { data } = await supabase
     .from('notifications')
     .select('*')
@@ -283,46 +263,46 @@ async function fetchNotifications(uid) {
   return data || [];
 }
 
-async function markNotificationsRead(uid) {
+var markNotificationsRead = async function markNotificationsRead(uid) {
   await supabase.from('notifications').update({ read: true }).eq('user_id', uid).eq('read', false);
 }
 
-const api = { appleAvailable, signInWithApple, signOut, deleteAccount, getProfile, updateName, claimWelcome, getMyContact, saveContact, fetchFeed, fetchMyItems, createItem, deleteItem, markGiven, incrementView, requestItem, fetchOutgoing, fetchIncoming, acceptRequest, declineRequest, getContact, reportItem, blockUser, registerPush, fetchNotifications, markNotificationsRead };
+var api = { appleAvailable, signInWithApple, signOut, deleteAccount, getProfile, updateName, claimWelcome, getMyContact, saveContact, fetchFeed, fetchMyItems, createItem, deleteItem, markGiven, incrementView, requestItem, fetchOutgoing, fetchIncoming, acceptRequest, declineRequest, getContact, reportItem, blockUser, registerPush, fetchNotifications, markNotificationsRead };
 
 // ---------- Brand ----------
-const B = '#7028E8';
-const B_LIGHT = '#F1EBFF';
-const INK = '#111111';
-const SUB = '#8A8A8E';
-const CARD = '#F6F6F8';
-const GREEN = '#1DB954';
-const W = Dimensions.get('window').width;
+var B = '#7028E8';
+var B_LIGHT = '#F1EBFF';
+var INK = '#111111';
+var SUB = '#8A8A8E';
+var CARD = '#F6F6F8';
+var GREEN = '#1DB954';
+var W = Dimensions.get('window').width;
 
-const tap = () => {
+var tap = () => {
   try { Haptics.selectionAsync().catch(() => {}); } catch (e) {}
 };
-const success = () => {
+var success = () => {
   try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch (e) {}
 };
-const kc = (n) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+var kc = (n) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
 // ---------- Data ----------
-const CENTER = { latitude: 50.083, longitude: 14.43 }; // Praha, když není poloha
+var CENTER = { latitude: 50.083, longitude: 14.43 }; // Praha, když není poloha
 
-const CATEGORIES = [
+var CATEGORIES = [
   ['🛋️', 'Nábytek'], ['📱', 'Elektronika'], ['👕', 'Oblečení'], ['🧸', 'Pro děti'],
   ['📚', 'Knihy'], ['⚽', 'Sport'], ['🍳', 'Domácnost'], ['🪴', 'Zahrada'],
   ['🐾', 'Zvířata'], ['🎨', 'Hobby'],
 ];
-const CAT_GRAD = {
+var CAT_GRAD = {
   Nábytek: ['#EFE8FF', '#D9CCFF'], Elektronika: ['#FFF1E6', '#FFDCC2'], Oblečení: ['#EAF0FF', '#CFDCFF'],
   'Pro děti': ['#FFF0E8', '#FFD7C2'], Knihy: ['#FDEBEC', '#F9CDD0'], Sport: ['#E6F6FF', '#C9E9FF'],
   Domácnost: ['#F2F2F2', '#E0E0E0'], Zahrada: ['#E8F8EC', '#C8EDD2'], Zvířata: ['#FFF9E0', '#FFEFA8'], Hobby: ['#E6FAF6', '#C4EFE6'],
 };
-const catEmoji = (c) => (CATEGORIES.find((x) => x[1] === c) || ['🎁'])[0];
+var catEmoji = (c) => (CATEGORIES.find((x) => x[1] === c) || ['🎁'])[0];
 
 // Ukázkové věci jen pro úvodní obrazovku (ilustrace)
-const PHOTO_IDS = {
+var PHOTO_IDS = {
   Pohovka: 'photo-1555041469-a586c61ea9bc',
   'Dětské kolo': 'photo-1485965120184-e220f721d03e',
   'Monitor 24"': 'photo-1527443224154-c4a3942d3acf',
@@ -336,8 +316,8 @@ const PHOTO_IDS = {
   Sluchátka: 'photo-1505740420928-5e560c06d30e',
   'Sada hrnků': 'photo-1514228742587-6b1558fcca3d',
 };
-const photo = (id) => `https://images.unsplash.com/${id}?w=700&q=70&auto=format&fit=crop`;
-const ITEMS = [
+var photo = (id) => `https://images.unsplash.com/${id}?w=700&q=70&auto=format&fit=crop`;
+var ITEMS = [
   { t: 'Pohovka', e: '🛋️', km: '1,2', m: 8, g: ['#EFE8FF', '#D9CCFF'] },
   { t: 'Dětské kolo', e: '🚲', km: '2,4', m: 14, g: ['#E6F6FF', '#C9E9FF'] },
   { t: 'Monitor 24"', e: '🖥️', km: '0,8', m: 3, g: ['#FFF1E6', '#FFDCC2'] },
@@ -352,7 +332,7 @@ const ITEMS = [
   { t: 'Sada hrnků', e: '🍵', km: '0,6', m: 2, g: ['#E6FAF6', '#C4EFE6'] },
 ].map((it) => ({ ...it, img: PHOTO_IDS[it.t] ? photo(PHOTO_IDS[it.t]) : null }));
 
-const CONTACTS = [
+var CONTACTS = [
   { id: 'whatsapp', label: 'WhatsApp', e: '💬', color: '#25D366', field: 'phone' },
   { id: 'sms', label: 'SMS', e: '✉️', color: '#FF9500', field: 'phone' },
   { id: 'messenger', label: 'Messenger', e: '⚡', color: '#0084FF', field: 'messenger' },
@@ -360,7 +340,7 @@ const CONTACTS = [
 ];
 
 // facebook.com/jmeno, fb.com/jmeno, m.me/jmeno nebo jen "jmeno" → odkaz do Messengeru
-const messengerUrl = (raw) => {
+var messengerUrl = (raw) => {
   const v = (raw || '').trim();
   const pid = v.match(/profile\.php\?id=(\d+)/);
   if (pid) return `https://m.me/${pid[1]}`;
@@ -368,9 +348,9 @@ const messengerUrl = (raw) => {
   const user = m ? m[1] : v.replace(/^@/, '');
   return `https://m.me/${user}`;
 };
-const isFbLink = (raw) => /(facebook\.com|fb\.com|m\.me|messenger\.com)\/[^\s]+/i.test((raw || '').trim());
+var isFbLink = (raw) => /(facebook\.com|fb\.com|m\.me|messenger\.com)\/[^\s]+/i.test((raw || '').trim());
 
-function openContact(method, item, c) {
+var openContact = function openContact(method, item, c) {
   if (!c) return;
   const msg = `Ahoj, mám zájem o „${item.t}“ z TAKE.it. Je to ještě k dispozici? 🙂`;
   const enc = encodeURIComponent(msg);
@@ -386,7 +366,7 @@ function openContact(method, item, c) {
 }
 
 // Čas a vzdálenost pro lidi
-const ago = (ts) => {
+var ago = (ts) => {
   const min = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
   if (min < 1) return 'právě teď';
   if (min < 60) return `před ${min} min`;
@@ -396,10 +376,10 @@ const ago = (ts) => {
   if (d === 1) return 'včera';
   return d < 5 ? `před ${d} dny` : `před ${d} dny`;
 };
-const kmText = (d) => (d == null ? 'v okolí' : d < 1 ? `${Math.max(100, Math.round(d * 10) * 100)} m` : `${d.toFixed(1).replace('.', ',')} km`);
+var kmText = (d) => (d == null ? 'v okolí' : d < 1 ? `${Math.max(100, Math.round(d * 10) * 100)} m` : `${d.toFixed(1).replace('.', ',')} km`);
 
 // Řádek z databáze → věc pro UI
-function mapItem(r, myId) {
+var mapItem = function mapItem(r, myId) {
   const photos = r.photos || [];
   const it = {
     id: r.id,
@@ -429,7 +409,7 @@ function mapItem(r, myId) {
 
 
 // ---------- UI základ ----------
-function Logo({ size = 40, color = B }) {
+var Logo = function Logo({ size = 40, color = B }) {
   return (
     <Text
       style={{
@@ -446,7 +426,7 @@ function Logo({ size = 40, color = B }) {
   );
 }
 
-function AppIcon({ size = 120 }) {
+var AppIcon = function AppIcon({ size = 120 }) {
   return (
     <View
       style={{
@@ -492,7 +472,7 @@ function AppIcon({ size = 120 }) {
   );
 }
 
-function FadeIn({ children, delay = 0, style }) {
+var FadeIn = function FadeIn({ children, delay = 0, style }) {
   const a = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(a, {
@@ -518,7 +498,7 @@ function FadeIn({ children, delay = 0, style }) {
   );
 }
 
-function Button({ title, onPress, disabled, light, style }) {
+var Button = function Button({ title, onPress, disabled, light, style }) {
   return (
     <Pressable
       disabled={disabled}
@@ -539,7 +519,7 @@ function Button({ title, onPress, disabled, light, style }) {
   );
 }
 
-function Option({ label, emoji, selected, onPress, delay = 0 }) {
+var Option = function Option({ label, emoji, selected, onPress, delay = 0 }) {
   const pop = useRef(new Animated.Value(1)).current;
   return (
     <FadeIn delay={delay}>
@@ -568,7 +548,7 @@ function Option({ label, emoji, selected, onPress, delay = 0 }) {
   );
 }
 
-function Confetti({ run, count = 28 }) {
+var Confetti = function Confetti({ run, count = 28 }) {
   const parts = useRef(
     Array.from({ length: count }, (_, i) => ({
       a: new Animated.Value(0),
@@ -609,7 +589,7 @@ function Confetti({ run, count = 28 }) {
   );
 }
 
-function PointsPill({ points }) {
+var PointsPill = function PointsPill({ points }) {
   const prev = useRef(points);
   const bump = useRef(new Animated.Value(1)).current;
   const fly = useRef(new Animated.Value(0)).current;
@@ -649,7 +629,7 @@ function PointsPill({ points }) {
   );
 }
 
-function StepLayout({ title, subtitle, children, cta = 'Pokračovat', disabled, onNext, secondary, onSecondary, center }) {
+var StepLayout = function StepLayout({ title, subtitle, children, cta = 'Pokračovat', disabled, onNext, secondary, onSecondary, center }) {
   return (
     <View style={{ flex: 1, paddingHorizontal: 24 }}>
       {title ? (
@@ -671,7 +651,7 @@ function StepLayout({ title, subtitle, children, cta = 'Pokračovat', disabled, 
   );
 }
 
-function Slider({ value, min, max, onChange }) {
+var Slider = function Slider({ value, min, max, onChange }) {
   const ref = useRef(null);
   const box = useRef({ x: 0, w: 1 });
   const cb = useRef(onChange);
@@ -720,7 +700,7 @@ function Slider({ value, min, max, onChange }) {
 }
 
 // Fotka věci (vlastní fotka > ukázková fotka > emoji jako záloha)
-function Thumb({ item, style, emojiSize = 30, src, children }) {
+var Thumb = function Thumb({ item, style, emojiSize = 30, src, children }) {
   const [err, setErr] = useState(false);
   const uri = src || item.uri || item.img;
   return (
@@ -735,7 +715,7 @@ function Thumb({ item, style, emojiSize = 30, src, children }) {
   );
 }
 
-function ItemCard({ item, i = 0, onPress }) {
+var ItemCard = function ItemCard({ item, i = 0, onPress }) {
   const size = (W - 48 - 12) / 2;
   return (
     <FadeIn delay={Math.min(i, 8) * 60} style={{ width: size, marginBottom: 12 }}>
@@ -754,7 +734,7 @@ function ItemCard({ item, i = 0, onPress }) {
   );
 }
 
-function Grid({ items, onItem }) {
+var Grid = function Grid({ items, onItem }) {
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
       {items.map((it, i) => (
@@ -766,7 +746,7 @@ function Grid({ items, onItem }) {
 
 
 // ---------- Flow (progress + kroky) ----------
-function Flow({ steps, onExit, onFinish, ctx }) {
+var Flow = function Flow({ steps, onExit, onFinish, ctx }) {
   const [i, setI] = useState(0);
   const prog = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -807,7 +787,7 @@ function Flow({ steps, onExit, onFinish, ctx }) {
 
 
 // ---------- Welcome ----------
-function FloatCard({ item, style, rot, delay }) {
+var FloatCard = function FloatCard({ item, style, rot, delay }) {
   const inA = useRef(new Animated.Value(0)).current;
   const fl = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -845,7 +825,7 @@ function FloatCard({ item, style, rot, delay }) {
   );
 }
 
-function Twinkle({ e, style, delay }) {
+var Twinkle = function Twinkle({ e, style, delay }) {
   const a = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.loop(
@@ -863,7 +843,7 @@ function Twinkle({ e, style, delay }) {
   );
 }
 
-function Welcome({ onStart }) {
+var Welcome = function Welcome({ onStart }) {
   const picks = [0, 4, 2, 8, 1, 10].map((k) => ITEMS[k]);
   const pos = [
     { left: 10, top: 20, rot: -8 },
@@ -900,7 +880,7 @@ function Welcome({ onStart }) {
 }
 
 // ---------- Intro ----------
-function Intro({ onPick }) {
+var Intro = function Intro({ onPick }) {
   const [sel, setSel] = useState(null);
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -937,7 +917,7 @@ function Intro({ onPick }) {
 
 
 // ---------- DAROVAT ----------
-function GiveReason({ next, ctx }) {
+var GiveReason = function GiveReason({ next, ctx }) {
   const [sel, setSel] = useState(ctx.data.reason || null);
   const opts = ['Rychle uklidit doma', 'Ušetřit za odvoz a skládku', 'Méně odpadu', 'Pomoct sousedům'];
   return (
@@ -957,7 +937,7 @@ function GiveReason({ next, ctx }) {
   );
 }
 
-function GiveSavings({ next }) {
+var GiveSavings = function GiveSavings({ next }) {
   const h1 = useRef(new Animated.Value(0)).current;
   const h2 = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -1002,7 +982,7 @@ function GiveSavings({ next }) {
 }
 
 // --- Animace podle důvodu darování ---
-function ClearAnim() {
+var ClearAnim = function ClearAnim() {
   const items = ['🛋️', '📚', '🧸', '🪑', '💡', '🧥'];
   const anims = useRef(items.map(() => new Animated.Value(0))).current;
   const sparkle = useRef(new Animated.Value(0)).current;
@@ -1047,7 +1027,7 @@ function ClearAnim() {
   );
 }
 
-function WasteAnim() {
+var WasteAnim = function WasteAnim() {
   const items = ['🛋️', '🚲', '🧸', '☕'];
   const anims = useRef(items.map(() => new Animated.Value(0))).current;
   const spin = useRef(new Animated.Value(0)).current;
@@ -1098,7 +1078,7 @@ function WasteAnim() {
   );
 }
 
-function NeighborsAnim() {
+var NeighborsAnim = function NeighborsAnim() {
   const people = ['👩', '👨‍🦰', '👵', '🧑', '👨‍👧', '👱‍♀️'];
   const pops = useRef(people.map(() => new Animated.Value(0))).current;
   const pulse = useRef(new Animated.Value(0)).current;
@@ -1178,7 +1158,7 @@ function NeighborsAnim() {
   );
 }
 
-const REASON_SCREENS = {
+var REASON_SCREENS = {
   'Rychle uklidit doma': {
     title: 'Uklizeno za pár minut',
     sub: 'Vyfotíš, přidáš – a sousedé si věci odnesou sami.',
@@ -1199,7 +1179,7 @@ const REASON_SCREENS = {
   },
 };
 
-function GiveImpact({ next, ctx }) {
+var GiveImpact = function GiveImpact({ next, ctx }) {
   const cfg = REASON_SCREENS[ctx.data.reason];
   if (!cfg) return <GiveSavings next={next} />;
   const { Anim } = cfg;
@@ -1217,7 +1197,7 @@ function GiveImpact({ next, ctx }) {
   );
 }
 
-function GiveWhat({ next, ctx }) {
+var GiveWhat = function GiveWhat({ next, ctx }) {
   const [sel, setSel] = useState(ctx.data.giveCats || []);
   const toggle = (c) => setSel(sel.includes(c) ? sel.filter((x) => x !== c) : [...sel, c]);
   return (
@@ -1249,7 +1229,7 @@ function GiveWhat({ next, ctx }) {
   );
 }
 
-function GiveAmount({ next, ctx }) {
+var GiveAmount = function GiveAmount({ next, ctx }) {
   const [sel, setSel] = useState(ctx.data.amount || null);
   const opts = [['📦', '1–5 věcí'], ['📦📦', '5–10 věcí'], ['🚚', '10–20 věcí'], ['🏠', 'Stěhuju se – víc než 20']];
   return (
@@ -1269,7 +1249,7 @@ function GiveAmount({ next, ctx }) {
   );
 }
 
-function GivePickup({ next, ctx }) {
+var GivePickup = function GivePickup({ next, ctx }) {
   const [sel, setSel] = useState(ctx.data.pickup || null);
   const opts = ['Kdykoli dnes', 'Jen večer', 'O víkendu', 'Nejdřív mi napište'];
   return (
@@ -1290,7 +1270,7 @@ function GivePickup({ next, ctx }) {
 }
 
 
-function PinBubble() {
+var PinBubble = function PinBubble() {
   return (
     <View style={st.pin}>
       <Text style={st.pinTxt}>TAKE.IT</Text>
@@ -1298,7 +1278,7 @@ function PinBubble() {
   );
 }
 
-function PopIn({ children, delay = 0 }) {
+var PopIn = function PopIn({ children, delay = 0 }) {
   const a = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(a, { toValue: 1, friction: 4, tension: 120, delay, useNativeDriver: true }).start();
@@ -1307,7 +1287,7 @@ function PopIn({ children, delay = 0 }) {
 }
 
 
-function GiveSpeed({ next }) {
+var GiveSpeed = function GiveSpeed({ next }) {
   const a = useRef(new Animated.Value(0)).current;
   const b = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -1342,10 +1322,10 @@ function GiveSpeed({ next }) {
   );
 }
 
-const DAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
-const MONTHS = ['ledna', 'února', 'března', 'dubna', 'května', 'června', 'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
+var DAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
+var MONTHS = ['ledna', 'února', 'března', 'dubna', 'května', 'června', 'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
 
-function NotifCard({ msg, depth }) {
+var NotifCard = function NotifCard({ msg, depth }) {
   const a = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(a, { toValue: 1, friction: 6, useNativeDriver: true }).start();
@@ -1378,7 +1358,7 @@ function NotifCard({ msg, depth }) {
   );
 }
 
-function NotifStack({ msgs }) {
+var NotifStack = function NotifStack({ msgs }) {
   const [n, setN] = useState(0);
   useEffect(() => {
     const ts = msgs.map((_, i) =>
@@ -1399,7 +1379,7 @@ function NotifStack({ msgs }) {
   );
 }
 
-function NotifyStep({ next, ctx, msgs }) {
+var NotifyStep = function NotifyStep({ next, ctx, msgs }) {
   const [v, setV] = useState(ctx.data.notify ?? 3);
   const now = new Date();
   const date = `${DAYS[now.getDay()]} ${now.getDate()}. ${MONTHS[now.getMonth()]}`;
@@ -1445,20 +1425,20 @@ function NotifyStep({ next, ctx, msgs }) {
   );
 }
 
-const NotifyGive = (p) => (
+var NotifyGive = (p) => (
   <NotifyStep
     {...p}
     msgs={['Jana si chce vyzvednout tvoje knihy 📚', 'Petr chce tvoji lampu. Domluvte se 👋', 'Tvoje pohovka má 3 zájemce! 🔥']}
   />
 );
-const NotifyTake = (p) => (
+var NotifyTake = (p) => (
   <NotifyStep
     {...p}
     msgs={['Nová věc v okolí: dětské kolo 🚲', 'Kávovar zdarma 600 m od tebe ☕', 'Retro gramofon se právě objevil kousek od tebe!']}
   />
 );
 
-function Setup({ next, title, items, emoji }) {
+var Setup = function Setup({ next, title, items, emoji }) {
   const [p, setP] = useState(0);
   const bounce = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -1513,7 +1493,7 @@ function Setup({ next, title, items, emoji }) {
   );
 }
 
-const SetupGive = (p) => (
+var SetupGive = (p) => (
   <Setup
     {...p}
     emoji="📦"
@@ -1524,7 +1504,7 @@ const SetupGive = (p) => (
 SetupGive.hideHeader = true;
 
 
-function Gallery({ item, height }) {
+var Gallery = function Gallery({ item, height }) {
   const [page, setPage] = useState(0);
   const slides = item.photos && item.photos.length
     ? item.photos.map((u) => ({ uri: u }))
@@ -1570,12 +1550,12 @@ function Gallery({ item, height }) {
 }
 
 
-function timeAgo(d) {
+var timeAgo = function timeAgo(d) {
   const m = Math.floor((Date.now() - d) / 60000);
   return m < 1 ? 'právě teď' : `před ${m} min`;
 }
 
-function Toast({ toast, onPress, onHide }) {
+var Toast = function Toast({ toast, onPress, onHide }) {
   const insets = useSafeAreaInsets();
   const a = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -1605,7 +1585,7 @@ function Toast({ toast, onPress, onHide }) {
 }
 
 
-function GiftStep({ next, ctx }) {
+var GiftStep = function GiftStep({ next, ctx }) {
   const [taps, setTaps] = useState(0);
   const [open, setOpen] = useState(false);
   const shake = useRef(new Animated.Value(0)).current;
@@ -1697,7 +1677,7 @@ GiftStep.noPoints = true;
 
 
 // ---------- CHCI ZDARMA ----------
-function TakeCategories({ next, ctx }) {
+var TakeCategories = function TakeCategories({ next, ctx }) {
   const [sel, setSel] = useState(ctx.data.cats || []);
   const toggle = (c) => setSel(sel.includes(c) ? sel.filter((x) => x !== c) : [...sel, c]);
   return (
@@ -1729,7 +1709,7 @@ function TakeCategories({ next, ctx }) {
   );
 }
 
-function TakeSavings({ next }) {
+var TakeSavings = function TakeSavings({ next }) {
   const rows = [['🛋️', 'Gauč', 3000], ['🍼', 'Kočárek', 2500], ['🖥️', 'Monitor', 1500], ['🚲', 'Kolo', 2500]];
   const sum = rows.reduce((s, r) => s + r[2], 0);
   const [total, setTotal] = useState(0);
@@ -1759,7 +1739,7 @@ function TakeSavings({ next }) {
   );
 }
 
-function TakeCompare({ next }) {
+var TakeCompare = function TakeCompare({ next }) {
   const a = useRef(new Animated.Value(0)).current;
   const b = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -1790,7 +1770,7 @@ function TakeCompare({ next }) {
   );
 }
 
-function TakeDistance({ next, ctx }) {
+var TakeDistance = function TakeDistance({ next, ctx }) {
   const [km, setKm] = useState(ctx.data.km || 5);
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -1835,7 +1815,7 @@ function TakeDistance({ next, ctx }) {
   );
 }
 
-const SetupTake = (p) => (
+var SetupTake = (p) => (
   <Setup
     {...p}
     emoji="🔎"
@@ -1847,7 +1827,7 @@ SetupTake.hideHeader = true;
 
 
 // ---------- Hlavní appka (záložky) ----------
-function Header({ title, right }) {
+var Header = function Header({ title, right }) {
   return (
     <View style={st.feedHeader}>
       {title ? <Text style={[st.h1, { fontSize: 30 }]}>{title}</Text> : <Logo size={30} />}
@@ -1856,7 +1836,7 @@ function Header({ title, right }) {
   );
 }
 
-function MapPin({ item, active }) {
+var MapPin = function MapPin({ item, active }) {
   return (
     <View style={{ alignItems: 'center' }}>
       <View style={[st.mapPin, active && { borderColor: B, transform: [{ scale: 1.15 }] }, item.badge && { borderColor: item.badgeColor || B }]}>
@@ -1867,7 +1847,7 @@ function MapPin({ item, active }) {
   );
 }
 
-function ItemsMap({ items, selected, onSelect, onOpen, center = CENTER }) {
+var ItemsMap = function ItemsMap({ items, selected, onSelect, onOpen, center = CENTER }) {
   const card = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(card, { toValue: selected ? 1 : 0, friction: 8, useNativeDriver: true }).start();
@@ -1938,7 +1918,7 @@ function ItemsMap({ items, selected, onSelect, onOpen, center = CENTER }) {
   );
 }
 
-function FiltersSheet({ visible, value, onClose, onApply, count }) {
+var FiltersSheet = function FiltersSheet({ visible, value, onClose, onApply, count }) {
   const [d, setD] = useState(value);
   useEffect(() => {
     if (visible) setD(value);
@@ -2012,7 +1992,7 @@ function FiltersSheet({ visible, value, onClose, onApply, count }) {
 }
 
 
-const TABS = [
+var TABS = [
   ['home', '🏠', 'Domů'],
   ['mine', '📦', 'Moje věci'],
   ['add', '＋', ''],
@@ -2020,7 +2000,7 @@ const TABS = [
   ['profile', '👤', 'Profil'],
 ];
 
-function MainApp({ ctx }) {
+var MainApp = function MainApp({ ctx }) {
   const pending = ctx.incoming.filter((r) => r.status === 'pending').length;
   const tab = ctx.tab;
   return (
@@ -2068,7 +2048,7 @@ function MainApp({ ctx }) {
   );
 }
 
-function AddItemModal({ ctx }) {
+var AddItemModal = function AddItemModal({ ctx }) {
   return (
     <Modal visible={ctx.addOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={ctx.closeAdd}>
       <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: 16 }}>
@@ -2094,7 +2074,7 @@ function AddItemModal({ ctx }) {
 
 
 // ---------- Mapa sousedů v onboardingu (bez vymyšlených dat) ----------
-function NeighborsMap({ next, ctx }) {
+var NeighborsMap = function NeighborsMap({ next, ctx }) {
   const pulse = useRef(new Animated.Value(0)).current;
   const center = ctx.loc || CENTER;
   useEffect(() => {
@@ -2140,7 +2120,7 @@ function NeighborsMap({ next, ctx }) {
   );
 }
 
-function TakeDone({ next }) {
+var TakeDone = function TakeDone({ next }) {
   return (
     <StepLayout title="Hotovo, můžeš začít" subtitle="Ukážeme ti věci zdarma kolem tebe. Když něco najdeš, klepni na „Mám zájem“." cta="Ukázat věci kolem mě" onNext={next} center>
       <View style={{ alignItems: 'center' }}>
@@ -2153,7 +2133,7 @@ function TakeDone({ next }) {
 }
 
 // ---------- Přihlášení přes Apple ----------
-function LoginSheet({ visible, onClose, onSuccess }) {
+var LoginSheet = function LoginSheet({ visible, onClose, onSuccess }) {
   const [busy, setBusy] = useState(false);
   const [avail, setAvail] = useState(Platform.OS === 'ios');
   useEffect(() => {
@@ -2212,7 +2192,7 @@ function LoginSheet({ visible, onClose, onSuccess }) {
 }
 
 // ---------- Přidání věci ----------
-function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideSkip }) {
+var FirstItem = function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideSkip }) {
   const saved = ctx.contact || {};
   const [photos, setPhotos] = useState([]);
   const [title, setTitle] = useState('');
@@ -2368,9 +2348,9 @@ function FirstItem({ next, ctx, title: heading = 'Daruj svou první věc', hideS
 }
 
 // ---------- Detail věci ----------
-const REPORT_REASONS = ['Nevhodný obsah', 'Podvod nebo spam', 'Věc se prodává', 'Zakázaná věc', 'Jiný důvod'];
+var REPORT_REASONS = ['Nevhodný obsah', 'Podvod nebo spam', 'Věc se prodává', 'Zakázaná věc', 'Jiný důvod'];
 
-function ItemDetail({ item, onClose, ctx }) {
+var ItemDetail = function ItemDetail({ item, onClose, ctx }) {
   const [asking, setAsking] = useState(false);
   const [msg, setMsg] = useState('Ahoj, můžu si to vyzvednout dnes večer?');
   const [contact, setContact] = useState(null);
@@ -2604,7 +2584,7 @@ function ItemDetail({ item, onClose, ctx }) {
 }
 
 // ---------- Po zveřejnění ----------
-function Given({ ctx, onContinue }) {
+var Given = function Given({ ctx, onContinue }) {
   const item = ctx.myItems[0];
   return (
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
@@ -2635,7 +2615,7 @@ function Given({ ctx, onContinue }) {
 }
 
 // ---------- Domů ----------
-function HomeTab({ ctx }) {
+var HomeTab = function HomeTab({ ctx }) {
   const [open, setOpen] = useState(null);
   const [q, setQ] = useState('');
   const [f, setF] = useState({ cats: [], km: ctx.data.km || 20, sort: 'new' });
@@ -2794,13 +2774,13 @@ function HomeTab({ ctx }) {
 }
 
 // ---------- Moje věci ----------
-const STATUS_TABS = [
+var STATUS_TABS = [
   ['active', 'Aktivní'],
   ['reserved', 'Rezervované'],
   ['given', 'Předané'],
 ];
 
-function MyItemsTab({ ctx }) {
+var MyItemsTab = function MyItemsTab({ ctx }) {
   const [seg, setSeg] = useState('active');
   const [open, setOpen] = useState(null);
   const list = ctx.myItems.filter((x) => x.status === seg);
@@ -2878,7 +2858,7 @@ function MyItemsTab({ ctx }) {
   );
 }
 
-function LoginPrompt({ ctx, text }) {
+var LoginPrompt = function LoginPrompt({ ctx, text }) {
   return (
     <View style={{ alignItems: 'center', paddingHorizontal: 32, marginTop: 60 }}>
       <AppIcon size={80} />
@@ -2890,7 +2870,7 @@ function LoginPrompt({ ctx, text }) {
 }
 
 // ---------- Aktivita ----------
-function ActivityTab({ ctx }) {
+var ActivityTab = function ActivityTab({ ctx }) {
   const [open, setOpen] = useState(null);
   if (!ctx.myId) {
     return (
@@ -2955,7 +2935,7 @@ function ActivityTab({ ctx }) {
 }
 
 // ---------- Profil ----------
-function ProfileTab({ ctx, onRestart }) {
+var ProfileTab = function ProfileTab({ ctx, onRestart }) {
   const p = ctx.profile;
   const [name, setName] = useState((p && p.name) || '');
   useEffect(() => setName((p && p.name) || ''), [p && p.name]);
@@ -3069,7 +3049,7 @@ function ProfileTab({ ctx, onRestart }) {
   );
 }
 
-function SettingsLinks() {
+var SettingsLinks = function SettingsLinks() {
   const rows = [
     ['📄', 'Podmínky použití', () => Linking.openURL(TERMS_URL)],
     ['🔒', 'Ochrana soukromí', () => Linking.openURL(PRIVACY_URL)],
@@ -3089,10 +3069,10 @@ function SettingsLinks() {
 }
 
 // ---------- Root ----------
-const GIVE_STEPS = [GiveReason, GiveImpact, GiveWhat, GiveAmount, GivePickup, NeighborsMap, GiveSpeed, NotifyGive, SetupGive, GiftStep, FirstItem];
-const TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, NotifyTake, SetupTake, GiftStep, TakeDone];
+var GIVE_STEPS = [GiveReason, GiveImpact, GiveWhat, GiveAmount, GivePickup, NeighborsMap, GiveSpeed, NotifyGive, SetupGive, GiftStep, FirstItem];
+var TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, NotifyTake, SetupTake, GiftStep, TakeDone];
 
-function Root() {
+var Root = function Root() {
   const [route, setRoute] = useState('loading');
   const [tab, setTab] = useState('home');
   const [data, setData] = useState({});
@@ -3303,7 +3283,7 @@ function Root() {
   );
 }
 
-function KeySetup({ onDone }) {
+var KeySetup = function KeySetup({ onDone }) {
   const [key, setKey] = useState('');
   const ok = /^(eyJ|sb_publishable_)/.test(key.trim());
   return (
@@ -3337,7 +3317,7 @@ function KeySetup({ onDone }) {
   );
 }
 
-export default function App() {
+var App = function App() {
   const [ready, setReady] = useState(null);
   useEffect(() => {
     AsyncStorage.getItem('sb_key').then((k) => {
@@ -3354,7 +3334,7 @@ export default function App() {
 
 
 // ---------- Styly ----------
-const st = StyleSheet.create({
+var st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#fff' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 6, paddingBottom: 14 },
   backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
@@ -3633,3 +3613,5 @@ const st = StyleSheet.create({
   },
 });
 
+exports.__esModule = true;
+exports.default = App;
