@@ -1,0 +1,213 @@
+// givo – generátor screenshotů pro App Store a Google Play.
+// Vše se skládá v prohlížeči (fotky z Unsplash), stáhne se jako PNG v přesném rozměru.
+(() => {
+  const OV = window.OVERLAYS || {};
+  const U = (id, w = 900) => `https://images.unsplash.com/${id}?w=${w}&q=75&auto=format&fit=crop`;
+  const PH = {
+    sofa: 'photo-1555041469-a586c61ea9bc',
+    bike: 'photo-1485965120184-e220f721d03e',
+    monitor: 'photo-1527443224154-c4a3942d3acf',
+    coffee: 'photo-1517668808822-9ebb02f2a0e6',
+    plant: 'photo-1614594975525-e45190c55d0b',
+    lamp: 'photo-1507473885765-e6ed057f782c',
+    books: 'photo-1512820790803-83ca734da794',
+    jacket: 'photo-1551028719-00167b16eac5',
+    teddy: 'photo-1559454403-b8fb88521f11',
+    chair: 'photo-1503602642458-232111445657',
+    phones: 'photo-1505740420928-5e560c06d30e',
+    mugs: 'photo-1514228742587-6b1558fcca3d',
+  };
+  const ICON = {
+    lock: '<svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+    pin: '<svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+  };
+  const SPARK = (c) => `<svg viewBox="0 0 24 24"><path fill="${c}" d="M12 0c.7 6.6 5.4 11.3 12 12-6.6.7-11.3 5.4-12 12-.7-6.6-5.4-11.3-12-12C6.6 11.3 11.3 6.6 12 0z"/></svg>`;
+
+  // ---------- stavební kameny ----------
+  const phone = (name, { x = 50, top, w, rot = 0, z = 2 }) => {
+    const ph = (OV[name] || [])
+      .map((o) => {
+        const [cx, cy, cw, ch] = o.c;
+        const [ix, iy, iw, ih] = o.i;
+        return `<span class="ph" style="left:${cx}%;top:${cy}%;width:${cw}%;height:${ch}%"><img src="${o.u}" alt="" style="left:${((ix - cx) / cw) * 100}%;top:${((iy - cy) / ch) * 100}%;width:${(iw / cw) * 100}%;height:${(ih / ch) * 100}%"></span>`;
+      })
+      .join('');
+    return `<div class="p" style="width:${w}px;top:${top}px;left:${x}%;z-index:${z};transform:translateX(-50%) rotate(${rot}deg)"><div class="scr">${ph}<img class="shotimg" src="/store/screen-${name}.webp" alt=""></div></div>`;
+  };
+  const head = (top, title, sub) => `<div class="head" style="top:${top}px"><h2>${title}</h2>${sub ? `<p class="sub">${sub}</p>` : ''}</div>`;
+  const spark = (x, y, s, c) => `<div class="spark" style="left:${x}%;top:${y}%;width:${s}px;height:${s}px">${SPARK(c)}</div>`;
+  const card = (x, y, w, inner, rot = 0) => `<div class="card" style="left:${x}px;top:${y}px;width:${w}px;transform:rotate(${rot}deg)">${inner}</div>`;
+  const photoIc = (id) => `<div class="ic"><img src="${U(id, 300)}" alt=""></div>`;
+  const svgIc = (k) => `<div class="ic">${ICON[k]}</div>`;
+  const phoneH = (w) => w * (0.952 * (844 / 390)) + w * 0.048 + 12; // přibližná výška rámečku
+
+  // ---------- jednotlivé obrázky ----------
+  // L = layout platformy: { W, H, headTop, phoneTop, phoneW }
+  const SHOTS = [
+    {
+      id: '1-uvod',
+      html: (L) => {
+        const u = L.W / 100;
+        const icon = u * 22;
+        const bubbles = [
+          ['sofa', 50, 0.0, 30], ['teddy', 14, 0.12, 19], ['phones', 84, 0.1, 21], ['plant', 22, 0.42, 22],
+          ['lamp', 80, 0.4, 18], ['books', 52, 0.55, 24], ['jacket', 13, 0.73, 15], ['chair', 84, 0.7, 17],
+          ['mugs', 33, 0.86, 13], ['coffee', 68, 0.88, 14],
+        ];
+        const areaTop = L.H * (L.play ? 0.4 : 0.37);
+        const areaH = L.H * (L.play ? 0.44 : 0.47);
+        return (
+          `<img class="icon-big" src="/img/icon-512.png" alt="" style="top:${L.headTop - u * 4}px;width:${icon}px;height:${icon}px">` +
+          head(L.headTop + icon + u * 5, 'Věci <em>zdarma</em><br>od sousedů') +
+          bubbles
+            .map(([k, x, y, s]) => {
+              const d = s * u;
+              return `<div class="bub" style="width:${d}px;height:${d}px;left:${(x / 100) * L.W - d / 2}px;top:${areaTop + y * areaH}px"><img src="${U(PH[k], 600)}" alt=""></div>`;
+            })
+            .join('') +
+          spark(8, 40, u * 6, '#7DE3B8') + spark(88, 31, u * 4.5, '#7028E8') + spark(60, 47, u * 3.5, '#B79CFF') + spark(6, 86, u * 5, '#7028E8') +
+          `<div class="foot" style="bottom:${u * 6}px">Pošli radost dál.</div>`
+        );
+      },
+    },
+    {
+      id: '2-v-okoli',
+      html: (L) => {
+        const u = L.W / 100;
+        return (
+          head(L.headTop, 'Najdi poklady<br><em>kousek od sebe</em>', 'Nábytek, oblečení, věci pro děti i elektronika – zdarma od sousedů.') +
+          phone('home', { top: L.phoneTop, w: L.phoneW }) +
+          card(u * 3, L.phoneTop + phoneH(L.phoneW) * 0.56, u * 50, `${photoIc(PH.sofa)}<div><b>Pohovka trojsed</b><span>Zdarma · 1,2 km</span></div>`, -4) +
+          spark(88, (L.phoneTop / L.H) * 100 + 4, u * 5, '#7DE3B8')
+        );
+      },
+    },
+    {
+      id: '3-mam-zajem',
+      html: (L) => {
+        const u = L.W / 100;
+        return (
+          head(L.headTop, 'Líbí se ti? Klepni<br>na <em>Mám zájem</em>', 'Napiš dárci pár slov a počkej, až tě potvrdí.') +
+          phone('detail', { top: L.phoneTop, w: L.phoneW }) +
+          spark(9, (L.phoneTop / L.H) * 100 + 10, u * 5.5, '#7028E8') + spark(90, (L.phoneTop / L.H) * 100 + 30, u * 4, '#7DE3B8')
+        );
+      },
+    },
+    {
+      id: '4-vyber-komu',
+      html: (L) => {
+        const u = L.W / 100;
+        return (
+          head(L.headTop, 'Ty vybereš,<br><em>komu</em> věc dáš', 'Zájemci se ti představí a ty rozhodneš.') +
+          phone('activity', { top: L.phoneTop, w: L.phoneW }) +
+          card(u * 6, L.phoneTop + phoneH(L.phoneW) * 0.62, u * 88, `${photoIc(PH.lamp)}<div><div class="app"><i></i>givo · teď</div><b>Nová žádost o Stolní lampu</b><span>Veronika: Hodila by se nám do dětského pokoje.</span></div>`)
+        );
+      },
+    },
+    {
+      id: '5-o-mne',
+      html: (L) => {
+        const u = L.W / 100;
+        return (
+          head(L.headTop, 'Řekni, <em>proč</em><br>věci hledáš', 'Dárci rádi vědí, komu dělají radost.') +
+          phone('why', { top: L.phoneTop, w: L.phoneW }) +
+          spark(10, (L.phoneTop / L.H) * 100 + 6, u * 5, '#7DE3B8') + spark(89, (L.phoneTop / L.H) * 100 + 24, u * 5.5, '#7028E8')
+        );
+      },
+    },
+    {
+      id: '6-bezpeci',
+      dark: true,
+      html: (L) => {
+        const u = L.W / 100;
+        const ph = phoneH(L.phoneW);
+        return (
+          head(L.headTop, 'Kontakt jen<br>pro <em>potvrzené</em>', 'Telefon ani přesné místo nikdo jiný neuvidí.') +
+          phone('mine', { top: L.phoneTop, w: L.phoneW }) +
+          card(u * 4, L.phoneTop + ph * 0.42, u * 60, `${svgIc('lock')}<div><b>Kontakt až po potvrzení</b><span>Vidí ho jen ten, koho vybereš</span></div>`, -3) +
+          card(u * 36, L.phoneTop + ph * 0.6, u * 60, `${svgIc('pin')}<div><b>Jen přibližná poloha</b><span>Zhruba na 500 metrů</span></div>`, 2)
+        );
+      },
+    },
+  ];
+
+  const FEATURE = {
+    id: 'feature-graphic',
+    dark: true,
+    html: () => {
+      const L = { W: 1024 };
+      const u = L.W / 100;
+      return (
+        `<div style="position:absolute;left:${u * 7}px;top:${u * 10}px;width:${u * 52}px">` +
+        `<div style="display:flex;align-items:center;gap:${u * 2.4}px"><img src="/img/icon-512.png" alt="" style="width:${u * 9}px;height:${u * 9}px;border-radius:22%;box-shadow:0 8px 20px -8px rgba(0,0,0,.4)">` +
+        `<img src="/img/logo.png" alt="" style="height:${u * 8}px;filter:brightness(0) invert(1)"></div>` +
+        `<h2 style="text-align:left;font-size:${u * 5.8}px;margin-top:${u * 3}px">Věci zdarma<br>od sousedů</h2>` +
+        `<p class="sub" style="text-align:left;margin-left:0;font-size:${u * 2.3}px">Pošli radost dál. Daruj, co nepotřebuješ, a najdi, co se ti hodí.</p></div>` +
+        phone('detail', { x: 72, top: u * 9, w: u * 23, rot: 8, z: 1 }) +
+        phone('home', { x: 86, top: u * 4, w: u * 23, rot: -6, z: 2 }) +
+        spark(60, 12, u * 3.5, '#7DE3B8') + spark(56, 78, u * 2.6, '#ffffff')
+      );
+    },
+  };
+
+  const LAYOUT = {
+    ios: { W: 1320, H: 2868, headTop: 230, phoneTop: 850, phoneW: 905 },
+    play: { W: 1080, H: 1920, headTop: 120, phoneTop: 560, play: true, phoneW: 620 },
+    feature: { W: 1024, H: 500 },
+  };
+
+  const grid = document.getElementById('grid');
+  let current = 'ios';
+  function render(set) {
+    current = set;
+    grid.innerHTML = '';
+    const L = LAYOUT[set];
+    const list = set === 'feature' ? [FEATURE] : SHOTS;
+    const pw = Math.min(set === 'feature' ? 640 : 330, window.innerWidth - 36);
+    list.forEach((s) => {
+      const scale = pw / L.W;
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.innerHTML =
+        `<div class="frame" style="width:${pw}px;height:${L.H * scale}px">` +
+        `<div class="shot${s.dark ? ' dark' : ''}" style="--u:${L.W / 100}px;width:${L.W}px;height:${L.H}px;transform:scale(${scale})">${s.html(L)}</div></div>` +
+        `<div class="meta"><span>${s.id} · ${L.W}×${L.H}</span><button class="dl">Stáhnout</button></div>`;
+      cell.querySelector('.dl').onclick = () => download(cell.querySelector('.shot'), `givo-${set}-${s.id}.png`, L);
+      grid.appendChild(cell);
+    });
+  }
+  async function download(node, name, L) {
+    const btn = node.closest('.cell').querySelector('.dl');
+    const old = btn.textContent;
+    btn.textContent = 'Generuju…';
+    try {
+      const url = await htmlToImage.toPng(node, { width: L.W, height: L.H, pixelRatio: 1, style: { transform: 'none' } });
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      btn.textContent = 'Staženo ✓';
+    } catch (e) {
+      console.error(e);
+      btn.textContent = 'Chyba – zkus znovu';
+    }
+    setTimeout(() => (btn.textContent = old), 2500);
+  }
+  document.querySelectorAll('.tabs button').forEach((b) =>
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
+      render(b.dataset.set);
+    })
+  );
+  document.getElementById('all').onclick = async () => {
+    const cells = [...grid.querySelectorAll('.cell')];
+    for (const c of cells) {
+      c.querySelector('.dl').click();
+      await new Promise((r) => setTimeout(r, 1800));
+    }
+  };
+  window.__givoStore = { render, LAYOUT };
+  render('ios');
+})();

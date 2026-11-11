@@ -89,7 +89,8 @@ h3 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.01em; }
 .phone::after { right: -5px; top: 26%; height: 15%; }
 .phone .screen { position: relative; width: 100%; aspect-ratio: 390 / 844; border-radius: 14.2% / 6.6%; overflow: hidden; background: #fff; }
 .phone .screen img { position: absolute; }
-.phone .screen .ph { object-fit: cover; background: #ece9f3; z-index: 0; }
+.phone .screen .ph { position: absolute; overflow: hidden; background: #ece9f3; z-index: 0; }
+.phone .screen .ph img { object-fit: cover; }
 .phone .screen .shot { inset: 0; width: 100%; height: 100%; z-index: 1; }
 /* Dynamic Island + jemný odlesk skla */
 .phone .screen::after { content: ''; position: absolute; z-index: 3; top: 1.35%; left: 50%; transform: translateX(-50%); width: 31%; aspect-ratio: 126 / 37; border-radius: 999px; background: #000; }
