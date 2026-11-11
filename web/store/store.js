@@ -1,8 +1,9 @@
 // givo – generátor screenshotů pro App Store a Google Play.
-// Vše se skládá v prohlížeči (fotky z Unsplash), stáhne se jako JPG v přesném rozměru (bez průhlednosti – App Store PNG s alfa kanálem odmítá).
+// Vše se skládá v prohlížeči (fotky z Unsplash uložené ve web/photos), stáhne se jako JPG v přesném rozměru (bez průhlednosti – App Store PNG s alfa kanálem odmítá).
 (() => {
   const OV = window.OVERLAYS || {};
-  const U = (id, w = 900) => `https://images.unsplash.com/${id}?w=${w}&q=75&auto=format&fit=crop`;
+  const PHOTO_FILE = {"photo-1555041469-a586c61ea9bc": "sofa", "photo-1485965120184-e220f721d03e": "bike", "photo-1527443224154-c4a3942d3acf": "monitor", "photo-1517668808822-9ebb02f2a0e6": "coffee", "photo-1614594975525-e45190c55d0b": "plant", "photo-1507473885765-e6ed057f782c": "lamp", "photo-1512820790803-83ca734da794": "books", "photo-1551028719-00167b16eac5": "jacket", "photo-1559454403-b8fb88521f11": "teddy", "photo-1503602642458-232111445657": "chair", "photo-1505740420928-5e560c06d30e": "phones", "photo-1514228742587-6b1558fcca3d": "mugs"};
+  const U = (id) => `/photos/${PHOTO_FILE[id]}.jpg`; // fotky z Unsplash uložené v repu (web/photos)
   const PH = {
     sofa: 'photo-1555041469-a586c61ea9bc',
     bike: 'photo-1485965120184-e220f721d03e',
