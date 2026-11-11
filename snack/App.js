@@ -8,7 +8,7 @@ var Device = require('expo-device');
 var Constants = __d(require('expo-constants'));
 var { decode } = require('base64-arraybuffer');
 var React = __d(require('react')); var { useCallback, useEffect, useRef, useState } = require('react');
-var { View, Text, StyleSheet, Pressable, Animated, Easing, ScrollView, TextInput, Image, Modal, PanResponder, ActivityIndicator, Dimensions, Platform, Alert, KeyboardAvoidingView, StatusBar, Linking, Share, RefreshControl } = require('react-native');
+var { View, Text, StyleSheet, TurboModuleRegistry, Pressable, Animated, Easing, ScrollView, TextInput, Image, Modal, PanResponder, ActivityIndicator, Dimensions, Platform, Alert, KeyboardAvoidingView, StatusBar, Linking, Share, RefreshControl } = require('react-native');
 var { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } = require('react-native-safe-area-context');
 var AsyncStorage = __d(require('@react-native-async-storage/async-storage'));
 var Notifications = require('expo-notifications');
@@ -305,21 +305,58 @@ var impact = (style = 'Light') => {
 var success = () => {
   try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch (e) {}
 };
-// Souvislá vibrace, která postupně sílí (husté jemné impulzy splývají v jedno „vrnění“).
-// iOS přes Expo neumí skutečnou plynulou vibraci, tohle je nejbližší náhrada.
-var RAMP = ['Soft', 'Light', 'Medium', 'Rigid', 'Heavy'];
+// Souvislá vibrace, která plynule sílí – Core Haptics přes Pulsar (react-native-pulsar).
+// Funguje jen v buildu (TestFlight / App Store). V Expo Go a Snacku nativní modul chybí,
+// takže se použije jednodušší varianta: jemné ťuknutí na začátku a potvrzení na konci.
+var PULSAR = null;
+try {
+  PULSAR = TurboModuleRegistry.get('RNPulsar');
+  if (PULSAR) PULSAR.PatternComposer_play; // obejití cache prototypu v RN (podle Pulsaru)
+} catch (e) {
+  PULSAR = null;
+}
+var PEAK = { Soft: 0.35, Light: 0.5, Medium: 0.65, Rigid: 0.85, Heavy: 1 };
 var rumble = (ms = 800, { peak, end = null, delay = 0 } = {}) => {
-  const top = RAMP.indexOf(peak || (ms < 500 ? 'Medium' : 'Heavy'));
-  const step = 26;
-  const n = Math.max(1, Math.round(ms / step));
+  const top = PEAK[peak || (ms < 500 ? 'Medium' : 'Heavy')] || 1;
   const timers = [];
-  for (let i = 0; i < n; i++) {
-    const t = i / Math.max(1, n - 1);
-    const lvl = RAMP[Math.min(top, Math.floor(t * t * (top + 1)))];
-    timers.push(setTimeout(() => impact(lvl), delay + i * step));
+  let id = -1;
+  let released = false;
+  const release = () => {
+    if (id === -1 || released) return;
+    released = true;
+    try {
+      PULSAR.PatternComposer_stop(id);
+      PULSAR.PatternComposer_release(id);
+    } catch (e) {}
+  };
+  if (PULSAR) {
+    try {
+      id = PULSAR.PatternComposer_parsePattern({
+        discretePattern: [{ time: ms, amplitude: top, frequency: 0.6 }],
+        continuousPattern: {
+          amplitude: [
+            { time: 0, value: 0.05 },
+            { time: Math.round(ms * 0.6), value: top * 0.5 },
+            { time: ms, value: top },
+          ],
+          frequency: [
+            { time: 0, value: 0.25 },
+            { time: ms, value: 0.7 },
+          ],
+        },
+      });
+      timers.push(setTimeout(() => { try { PULSAR.PatternComposer_play(id); } catch (e) {} }, delay));
+      timers.push(setTimeout(release, delay + ms + 600));
+    } catch (e) {
+      id = -1;
+    }
   }
+  if (id === -1) timers.push(setTimeout(() => impact('Soft'), delay));
   if (end) timers.push(setTimeout(() => (end === 'success' ? success() : impact(end)), delay + ms + 40));
-  return () => timers.forEach(clearTimeout);
+  return () => {
+    timers.forEach(clearTimeout);
+    release();
+  };
 };
 var kc = (n) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
