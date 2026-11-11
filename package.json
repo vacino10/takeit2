@@ -5,6 +5,7 @@
     "expo-image-picker": "*",
     "expo-linear-gradient": "*",
     "react-native-maps": "*",
-    "react-native-safe-area-context": "*"
+    "react-native-safe-area-context": "*",
+    "expo-notifications": "*"
   }
 }

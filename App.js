@@ -21,7 +21,8 @@ import {
   StatusBar,
   Linking,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -37,6 +38,19 @@ if (Platform.OS !== 'web') {
     Marker = maps.Marker;
   } catch (e) {}
 }
+
+// Notifikace se ukazují i když je appka otevřená
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+} catch (e) {}
 
 // ---------- Brand ----------
 const B = '#7028E8';
@@ -334,7 +348,7 @@ function ItemCard({ item, i = 0, onPress }) {
             <Text style={{ fontSize: size * 0.34 }}>{item.e}</Text>
           )}
           <View style={st.freeBadge}>
-            <Text style={st.freeBadgeTxt}>ZDARMA</Text>
+            <Text style={[st.freeBadgeTxt, item.badgeColor && { color: item.badgeColor }]}>{item.badge || 'ZDARMA'}</Text>
           </View>
         </LinearGradient>
         <View style={{ padding: 10 }}>
@@ -828,8 +842,13 @@ function NotifyStep({ next, ctx, msg }) {
   return (
     <StepLayout
       cta="Pokračovat"
-      onNext={() => {
+      onNext={async () => {
         ctx.set('notify', v);
+        if (v > 0) {
+          try {
+            await Notifications.requestPermissionsAsync();
+          } catch (e) {}
+        }
         next();
       }}
     >
@@ -1119,14 +1138,21 @@ function FirstItem({ next, ctx }) {
   );
 }
 
-function ItemDetail({ item, onClose }) {
+function ItemDetail({ item, onClose, ctx }) {
+  const [asking, setAsking] = useState(false);
+  const [msg, setMsg] = useState('Ahoj, můžu si to vyzvednout dnes večer?');
+  useEffect(() => setAsking(false), [item && item.t]);
   if (!item) return null;
+  const own = !item.demo;
+  const status = ctx.outReq[item.t];
   const methods = (item.contact && item.contact.methods) || [];
+  const incoming = ctx.requests;
+  const pending = incoming.filter((r) => r.status === 'pending').length;
   return (
     <Modal visible={!!item} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: '#fff' }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
-          <LinearGradient colors={item.g} style={{ height: 320, alignItems: 'center', justifyContent: 'center' }}>
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#fff' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
+          <LinearGradient colors={item.g} style={{ height: 300, alignItems: 'center', justifyContent: 'center' }}>
             {item.uri ? <Image source={{ uri: item.uri }} style={StyleSheet.absoluteFill} /> : <Text style={{ fontSize: 120 }}>{item.e}</Text>}
             <Pressable onPress={onClose} hitSlop={12} style={st.closeBtn}>
               <Text style={{ fontSize: 22, color: INK }}>✕</Text>
@@ -1135,34 +1161,177 @@ function ItemDetail({ item, onClose }) {
           <View style={{ padding: 24 }}>
             <Text style={st.h1}>{item.t}</Text>
             <Text style={{ color: GREEN, fontWeight: '900', fontSize: 22, marginTop: 6 }}>Zdarma</Text>
-            <Text style={[st.sub, { marginTop: 10 }]}>📍 {item.km === '0' ? 'Praha • právě teď' : `${item.km} km • před ${item.m} min`}</Text>
+            <Text style={[st.sub, { marginTop: 10 }]}>📍 {own ? 'Praha • právě teď' : `${item.km} km • před ${item.m} min`}</Text>
             {item.chip ? <Text style={st.sub}>🚪 Vyzvednutí: {item.chip}</Text> : null}
             {item.d ? <Text style={[st.body, { marginTop: 16 }]}>{item.d}</Text> : null}
-            <Text style={[st.section, { marginTop: 26 }]}>Kontaktuj dárce</Text>
-            {methods.length === 0 ? <Text style={st.chartAxis}>Dárce nezadal kontakt.</Text> : null}
-            {CONTACTS.filter((c) => methods.includes(c.id)).map((c, i) => (
-              <FadeIn key={c.id} delay={i * 60}>
-                <Pressable
-                  onPress={() => {
-                    tap();
-                    openContact(c.id, item);
-                  }}
-                  style={({ pressed }) => [st.contactBtn, { backgroundColor: c.color }, pressed && { opacity: 0.85 }]}
-                >
-                  <Text style={{ fontSize: 20 }}>{c.e}</Text>
-                  <Text style={st.contactBtnTxt}>
-                    {c.id === 'phone' ? 'Zavolat' : c.id === 'email' ? 'Napsat e-mail' : `Napsat přes ${c.label}`}
-                  </Text>
-                </Pressable>
+
+            {own ? (
+              <View style={[st.chartCard, { marginTop: 26 }]}>
+                <Text style={st.h2}>Tohle je tvoje věc</Text>
+                <Text style={st.chartAxis}>
+                  {ctx.data.ownReserved
+                    ? '✅ Rezervováno – zájemce dostal tvůj kontakt.'
+                    : incoming.length
+                    ? `Zájemci: ${incoming.length}${pending ? ` • čeká na tebe ${pending}` : ''}`
+                    : 'Zatím se nikdo nehlásil. Jakmile ano, přijde ti upozornění.'}
+                </Text>
+                {incoming.length ? (
+                  <Button
+                    title={`Zobrazit zájemce (${incoming.length})`}
+                    style={{ marginTop: 14, marginBottom: 0 }}
+                    onPress={() => {
+                      onClose();
+                      setTimeout(() => ctx.openInbox(), 450);
+                    }}
+                  />
+                ) : null}
+              </View>
+            ) : status === 'accepted' ? (
+              <View style={{ marginTop: 26 }}>
+                <View style={[st.statusCard, { backgroundColor: '#DDF7E5' }]}>
+                  <Text style={st.h2}>✅ Dárce potvrdil – je to tvoje!</Text>
+                  <Text style={st.chartAxis}>Kontakt je odemčený. Domluvte si vyzvednutí.</Text>
+                </View>
+                {CONTACTS.filter((c) => methods.includes(c.id)).map((c, i) => (
+                  <FadeIn key={c.id} delay={i * 60}>
+                    <Pressable
+                      onPress={() => {
+                        tap();
+                        openContact(c.id, item);
+                      }}
+                      style={({ pressed }) => [st.contactBtn, { backgroundColor: c.color }, pressed && { opacity: 0.85 }]}
+                    >
+                      <Text style={{ fontSize: 20 }}>{c.e}</Text>
+                      <Text style={st.contactBtnTxt}>
+                        {c.id === 'phone' ? 'Zavolat' : c.id === 'email' ? 'Napsat e-mail' : `Napsat přes ${c.label}`}
+                      </Text>
+                    </Pressable>
+                  </FadeIn>
+                ))}
+              </View>
+            ) : status === 'pending' ? (
+              <View style={[st.statusCard, { marginTop: 26 }]}>
+                <ActivityIndicator color={B} />
+                <Text style={[st.h2, { marginTop: 10, textAlign: 'center' }]}>Čekáme na potvrzení dárce…</Text>
+                <Text style={[st.chartAxis, { textAlign: 'center' }]}>Jakmile potvrdí, přijde ti upozornění a odemkne se kontakt.</Text>
+              </View>
+            ) : asking ? (
+              <FadeIn style={{ marginTop: 26 }}>
+                <Text style={st.section}>Zpráva pro dárce</Text>
+                <TextInput value={msg} onChangeText={setMsg} multiline style={[st.input, { height: 90, textAlignVertical: 'top' }]} />
+                <Button
+                  title="Odeslat žádost"
+                  style={{ marginTop: 14 }}
+                  disabled={!msg.trim()}
+                  onPress={() => ctx.requestItem(item, msg.trim())}
+                />
               </FadeIn>
-            ))}
-            <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 12 }]}>
-              Zpráva se předvyplní – stačí ji odeslat.
-            </Text>
+            ) : (
+              <View style={{ marginTop: 26 }}>
+                <Button title="🙋  Mám zájem" onPress={() => setAsking(true)} />
+                <Text style={[st.chartAxis, { textAlign: 'center' }]}>
+                  🔒 Kontakt na dárce se odemkne, až potvrdí tvoji žádost.
+                </Text>
+              </View>
+            )}
           </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function timeAgo(d) {
+  const m = Math.floor((Date.now() - d) / 60000);
+  return m < 1 ? 'právě teď' : `před ${m} min`;
+}
+
+function Inbox({ ctx }) {
+  const item = ctx.data.item;
+  return (
+    <Modal visible={ctx.inbox} animationType="slide" presentationStyle="pageSheet" onRequestClose={ctx.closeInbox}>
+      <View style={{ flex: 1, backgroundColor: '#fff' }}>
+        <View style={st.inboxHeader}>
+          <Text style={st.h2}>Zájemci</Text>
+          <Pressable onPress={ctx.closeInbox} hitSlop={12}>
+            <Text style={{ fontSize: 17, color: B, fontWeight: '700' }}>Hotovo</Text>
+          </Pressable>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 24 }}>
+          {item ? (
+            <View style={[st.itemCard, { flexDirection: 'row', alignItems: 'center', marginBottom: 18 }]}>
+              <LinearGradient colors={item.g} style={{ width: 64, height: 64, alignItems: 'center', justifyContent: 'center' }}>
+                {item.uri ? <Image source={{ uri: item.uri }} style={StyleSheet.absoluteFill} /> : <Text style={{ fontSize: 28 }}>{item.e}</Text>}
+              </LinearGradient>
+              <View style={{ padding: 12, flex: 1 }}>
+                <Text style={st.itemTitle}>{item.t}</Text>
+                <Text style={st.itemMeta}>{ctx.data.ownReserved ? '✅ Rezervováno' : 'Zdarma • aktivní'}</Text>
+              </View>
+            </View>
+          ) : null}
+          {ctx.requests.length === 0 ? (
+            <View style={{ alignItems: 'center', marginTop: 40 }}>
+              <Text style={{ fontSize: 48 }}>📭</Text>
+              <Text style={[st.h2, { marginTop: 10 }]}>Zatím nikdo</Text>
+              <Text style={[st.chartAxis, { textAlign: 'center' }]}>Jakmile se někdo přihlásí, přijde ti upozornění.</Text>
+            </View>
+          ) : null}
+          {ctx.requests.map((r, i) => (
+            <FadeIn key={r.id} delay={i * 80} style={[st.reqCard, r.status === 'declined' && { opacity: 0.5 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={st.avatar}>
+                  <Text style={{ fontSize: 24 }}>{r.e}</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={st.h2}>{r.from}</Text>
+                  <Text style={st.chartAxis}>{r.km} km od tebe • {timeAgo(r.at)}</Text>
+                </View>
+              </View>
+              <Text style={[st.body, { marginTop: 10 }]}>„{r.msg}“</Text>
+              {r.status === 'pending' ? (
+                <View style={{ flexDirection: 'row', marginTop: 12 }}>
+                  <Button title="Potvrdit" style={{ flex: 1, height: 48, marginRight: 8, marginBottom: 0 }} onPress={() => ctx.accept(r.id)} />
+                  <Button title="Odmítnout" light style={{ flex: 1, height: 48, marginBottom: 0 }} onPress={() => ctx.decline(r.id)} />
+                </View>
+              ) : (
+                <Text style={[st.chartAxis, { marginTop: 10, fontWeight: '700', color: r.status === 'accepted' ? GREEN : SUB }]}>
+                  {r.status === 'accepted' ? '✅ Potvrzeno – poslali jsme mu tvůj kontakt' : 'Odmítnuto'}
+                </Text>
+              )}
+            </FadeIn>
+          ))}
         </ScrollView>
       </View>
     </Modal>
+  );
+}
+
+function Toast({ toast, onPress, onHide }) {
+  const insets = useSafeAreaInsets();
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!toast) return;
+    a.setValue(0);
+    Animated.spring(a, { toValue: 1, friction: 7, useNativeDriver: true }).start();
+    const t = setTimeout(() => Animated.timing(a, { toValue: 0, duration: 250, useNativeDriver: true }).start(onHide), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+  if (!toast) return null;
+  return (
+    <Animated.View
+      style={[
+        st.toast,
+        { top: insets.top + 6, opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [-120, 0] }) }] },
+      ]}
+    >
+      <Pressable onPress={onPress} style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <AppIcon size={40} />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={{ fontWeight: '800', color: INK, fontSize: 15 }}>{toast.title}</Text>
+          <Text style={{ color: SUB, fontSize: 14, marginTop: 2 }} numberOfLines={2}>{toast.body}</Text>
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -1170,6 +1339,7 @@ const GIVE_STEPS = [GiveReason, GiveImpact, GivePickup, NeighborsMap, GiveSpeed,
 
 function Given({ ctx, onBrowse, onRestart }) {
   const item = ctx.data.item;
+  const n = ctx.requests.length;
   return (
     <SafeAreaView style={st.safe} edges={['top', 'bottom']}>
       <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
@@ -1195,6 +1365,23 @@ function Given({ ctx, onBrowse, onRestart }) {
                 </Text>
               ) : null}
             </View>
+          </FadeIn>
+        ) : null}
+        {item ? (
+          <FadeIn delay={500} style={[st.statusCard, { marginTop: 16 }]}>
+            {n ? (
+              <>
+                <Text style={st.h2}>🙋 Zájemci: {n}</Text>
+                <Button title="Zobrazit zájemce" style={{ marginTop: 12, marginBottom: 0, alignSelf: 'stretch' }} onPress={ctx.openInbox} />
+              </>
+            ) : (
+              <>
+                <ActivityIndicator color={B} />
+                <Text style={[st.chartAxis, { textAlign: 'center', marginTop: 8 }]}>
+                  Demo: za pár vteřin se ozve první soused – sleduj upozornění 👀
+                </Text>
+              </>
+            )}
           </FadeIn>
         ) : null}
       </View>
@@ -1477,15 +1664,39 @@ const TAKE_STEPS = [TakeCategories, TakeSavings, TakeCompare, TakeDistance, Noti
 
 // ---------- Hlavní feed ----------
 function Feed({ ctx, onGive, onRestart }) {
-  const items = ctx.data.item ? [ctx.data.item, ...ITEMS] : ITEMS;
   const [open, setOpen] = useState(null);
+  const own = ctx.data.item
+    ? [{ ...ctx.data.item, badge: ctx.data.ownReserved ? 'REZERVOVÁNO' : 'TVOJE', badgeColor: ctx.data.ownReserved ? '#FF9500' : B }]
+    : [];
+  const items = [
+    ...own,
+    ...ITEMS.map((it) =>
+      ctx.outReq[it.t] === 'accepted'
+        ? { ...it, badge: 'TVOJE 🎉', badgeColor: B }
+        : ctx.outReq[it.t] === 'pending'
+        ? { ...it, badge: 'ČEKÁ', badgeColor: '#FF9500' }
+        : it
+    ),
+  ];
+  const pending = ctx.requests.filter((r) => r.status === 'pending').length;
+  const current = open ? items.find((x) => x.t === open.t) || open : null;
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
       <View style={st.feedHeader}>
         <Logo size={30} />
-        <Pressable onPress={onRestart} hitSlop={10}>
-          <Text style={{ color: SUB, fontWeight: '600' }}>Reset</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Pressable onPress={ctx.openInbox} hitSlop={10} style={{ marginRight: 18 }}>
+            <Text style={{ fontSize: 24 }}>🔔</Text>
+            {pending ? (
+              <View style={st.bellBadge}>
+                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '900' }}>{pending}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+          <Pressable onPress={onRestart} hitSlop={10}>
+            <Text style={{ color: SUB, fontWeight: '600' }}>Reset</Text>
+          </Pressable>
+        </View>
       </View>
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}>
         <Text style={[st.h2, { marginBottom: 4 }]}>Zdarma kolem tebe</Text>
@@ -1498,7 +1709,6 @@ function Feed({ ctx, onGive, onRestart }) {
           }}
         />
       </ScrollView>
-      <ItemDetail item={open} onClose={() => setOpen(null)} />
       <Pressable
         onPress={() => {
           tap();
@@ -1508,17 +1718,100 @@ function Feed({ ctx, onGive, onRestart }) {
       >
         <Text style={{ color: '#fff', fontWeight: '800', fontSize: 17 }}>＋ Darovat</Text>
       </Pressable>
+      <ItemDetail item={current} onClose={() => setOpen(null)} ctx={ctx} />
     </SafeAreaView>
   );
 }
 
 // ---------- App ----------
-export default function App() {
+const NEIGHBORS = [
+  { from: 'Petr', e: '👨‍🦰', km: '0,8', msg: 'Ahoj, můžu si to vyzvednout dnes v 18:00?', delay: 5000 },
+  { from: 'Jana', e: '👩', km: '1,4', msg: 'Dobrý den, mám zájem, bydlím kousek od vás 🙂', delay: 13000 },
+];
+
+function Root() {
   const [route, setRoute] = useState('intro');
   const [data, setData] = useState({});
-  const ctx = { data, set: (k, v) => setData((d) => ({ ...d, [k]: v })) };
+  const [requests, setRequests] = useState([]);
+  const [outReq, setOutReq] = useState({});
+  const [inbox, setInbox] = useState(false);
+  const [toast, setToast] = useState(null);
+  const timers = useRef([]);
+
+  const notify = async (title, body, payload) => {
+    let shown = false;
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status === 'granted') {
+        await Notifications.scheduleNotificationAsync({ content: { title, body, data: payload, sound: true }, trigger: null });
+        shown = true;
+      }
+    } catch (e) {}
+    if (!shown) setToast({ title, body, data: payload });
+  };
+
+  // Demo: po zveřejnění věci se ozvou sousedé
+  useEffect(() => {
+    if (!data.item) return;
+    const name = data.item.t;
+    const ids = NEIGHBORS.map((n) =>
+      setTimeout(() => {
+        setRequests((rs) => [...rs, { ...n, id: n.from + Date.now(), status: 'pending', at: Date.now() }]);
+        success();
+        notify(`${n.from} chce „${name}“ 👋`, n.msg, { type: 'request' });
+      }, n.delay)
+    );
+    timers.current.push(...ids);
+    return () => ids.forEach(clearTimeout);
+  }, [data.item]);
+
+  // Klepnutí na notifikaci
+  useEffect(() => {
+    let sub;
+    try {
+      sub = Notifications.addNotificationResponseReceivedListener((r) => {
+        const t = r.notification.request.content.data && r.notification.request.content.data.type;
+        if (t === 'request') setInbox(true);
+      });
+    } catch (e) {}
+    return () => sub && sub.remove();
+  }, []);
+
+  const ctx = {
+    data,
+    set: (k, v) => setData((d) => ({ ...d, [k]: v })),
+    requests,
+    outReq,
+    inbox,
+    openInbox: () => setInbox(true),
+    closeInbox: () => setInbox(false),
+    accept: (id) => {
+      const r = requests.find((x) => x.id === id);
+      setRequests((rs) => rs.map((x) => (x.id === id ? { ...x, status: 'accepted' } : x.status === 'pending' ? { ...x, status: 'declined' } : x)));
+      setData((d) => ({ ...d, ownReserved: true }));
+      success();
+      if (r) setToast({ title: 'Potvrzeno 🎉', body: `${r.from} dostal upozornění a tvůj kontakt. Ostatním dáme vědět, že je zamluveno.` });
+    },
+    decline: (id) => setRequests((rs) => rs.map((x) => (x.id === id ? { ...x, status: 'declined' } : x))),
+    requestItem: (item, msg) => {
+      setOutReq((o) => ({ ...o, [item.t]: 'pending' }));
+      success();
+      const t = setTimeout(() => {
+        setOutReq((o) => ({ ...o, [item.t]: 'accepted' }));
+        success();
+        notify(`${item.t} je tvoje! 🎉`, 'Dárce potvrdil tvoji žádost – kontakt je odemčený. Domluvte si vyzvednutí.', { type: 'accepted' });
+      }, 6000);
+      timers.current.push(t);
+    },
+  };
+
   const restart = () => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
     setData({});
+    setRequests([]);
+    setOutReq({});
+    setInbox(false);
     setRoute('intro');
   };
 
@@ -1533,9 +1826,26 @@ export default function App() {
   else screen = <Feed ctx={ctx} onGive={() => setRoute('give')} onRestart={restart} />;
 
   return (
-    <SafeAreaProvider>
+    <View style={{ flex: 1 }}>
       <StatusBar barStyle="dark-content" />
       {screen}
+      <Inbox ctx={ctx} />
+      <Toast
+        toast={toast}
+        onHide={() => setToast(null)}
+        onPress={() => {
+          if (toast && toast.data && toast.data.type === 'request') setInbox(true);
+          setToast(null);
+        }}
+      />
+    </View>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <Root />
     </SafeAreaProvider>
   );
 }
@@ -1638,6 +1948,24 @@ const st = StyleSheet.create({
     padding: 14,
   },
   photoThumb: { width: 110, height: 110, borderRadius: 16, marginRight: 10 },
+  statusCard: { backgroundColor: B_LIGHT, borderRadius: 20, padding: 18, alignItems: 'center' },
+  inboxHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#EFEFF2' },
+  reqCard: { backgroundColor: CARD, borderRadius: 20, padding: 16, marginBottom: 12 },
+  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: B_LIGHT, alignItems: 'center', justifyContent: 'center' },
+  bellBadge: { position: 'absolute', top: -4, right: -8, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  toast: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
   section: { fontSize: 20, fontWeight: '800', color: INK, marginTop: 22, marginBottom: 6 },
   body: { fontSize: 17, lineHeight: 24, color: INK },
   inputErr: { borderWidth: 2, borderColor: '#FF3B30' },
